@@ -1,6 +1,0 @@
-﻿app/reports/page.tsx(11,24): error TS2322: Type '{ userId: string; }' is not assignable to type 'IntrinsicAttributes'.
-  Property 'userId' does not exist on type 'IntrinsicAttributes'.
-components/IssueCard.tsx(88,45): error TS2322: Type 'IssueStatusState' is not assignable to type '"Open" | "Under Review" | "In Progress"'.
-  Type '"Resolved"' is not assignable to type '"Open" | "Under Review" | "In Progress"'.
-components/IssueFeed.tsx(24,17): error TS2339: Property 'issues' does not exist on type '{ issues: Issue[]; lastVisible: QueryDocumentSnapshot<DocumentData, DocumentData>; } | undefined'.
-components/IssueFeed.tsx(24,36): error TS2339: Property 'lastVisible' does not exist on type '{ issues: Issue[]; lastVisible: QueryDocumentSnapshot<DocumentData, DocumentData>; } | undefined'.

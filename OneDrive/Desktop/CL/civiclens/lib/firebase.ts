@@ -5,13 +5,13 @@ import { getStorage } from "firebase/storage";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyBJtNV6_Tk1JBvL8q-jQieL7s8VCMs23Io",
-    authDomain: "civiclens-dd80b.firebaseapp.com",
-    projectId: "civiclens-dd80b",
-    storageBucket: "civiclens-dd80b.firebasestorage.app",
-    messagingSenderId: "1079522964144",
-    appId: "1:1079522964144:web:ba3182639e912e28308175",
-    measurementId: "G-YTDS68DGF8"
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase
