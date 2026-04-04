@@ -26,7 +26,6 @@ export const supabase = createClient(
     supabaseUrl || 'https://placeholder.supabase.co',
     supabaseAnonKey || 'placeholder_key',
     {
-        // Disable Supabase Auth — Firebase Auth is the sole auth provider.
         auth: {
             persistSession: false,
             autoRefreshToken: false,
@@ -34,3 +33,22 @@ export const supabase = createClient(
         },
     }
 );
+
+/**
+ * Temporarily sets the Supabase Auth session using a Firebase JWT.
+ * This allows Supabase Storage RLS (Row Level Security) to enforce 'authenticated'
+ * rules natively, even though Firebase handles our core authentication.
+ */
+export const getAuthenticatedSupabase = async (firebaseUser: any) => {
+    if (!firebaseUser) return supabase;
+    try {
+        const token = await firebaseUser.getIdToken();
+        await supabase.auth.setSession({
+            access_token: token,
+            refresh_token: ''
+        });
+    } catch (e) {
+        console.error('Failed to set Supabase session with Firebase token', e);
+    }
+    return supabase;
+};

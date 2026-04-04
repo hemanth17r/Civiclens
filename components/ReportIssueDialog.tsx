@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createIssue } from '@/lib/issues';
 import { useAuth } from '@/context/AuthContext';
 import { INDIAN_CITIES } from '@/data/cities';
-import { supabase } from '@/lib/supabase';
+import { supabase, getAuthenticatedSupabase } from '@/lib/supabase';
 
 interface ReportIssueDialogProps {
     isOpen: boolean;
@@ -57,11 +57,13 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
         try {
             // Upload Media via Supabase Storage
             const uploadedUrls: string[] = [];
+            const authSupabase = await getAuthenticatedSupabase(user);
+            
             for (const file of mediaFiles) {
                 const uniqueName = Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9.\-_]/g, '');
                 const filePath = `${user.uid}/${uniqueName}`;
                 
-                const { data, error } = await supabase.storage
+                const { data, error } = await authSupabase.storage
                     .from('media')
                     .upload(filePath, file);
 
@@ -70,7 +72,7 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                     throw new Error('Failed to upload media to Supabase.');
                 }
 
-                const { data: publicUrlData } = supabase.storage
+                const { data: publicUrlData } = authSupabase.storage
                     .from('media')
                     .getPublicUrl(filePath);
                     

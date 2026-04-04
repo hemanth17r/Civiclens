@@ -9,7 +9,7 @@ import {
 import { collection, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { db } from '@/lib/firebase';
-import { supabase } from '@/lib/supabase';
+import { supabase, getAuthenticatedSupabase } from '@/lib/supabase';
 import { Issue, getUserHypedIssues, getUserCommentedIssues, getUserSavedIssues } from '@/lib/issues';
 import { getFollowStats } from '@/lib/followers';
 import IssueCard from '@/components/IssueCard';
@@ -199,7 +199,8 @@ export default function ProfilePage() {
             let photoURL = user.photoURL || '';
             if (photoFile) {
                 const filePath = `profile_photos/${user.uid}`;
-                const { data, error } = await supabase.storage
+                const authSupabase = await getAuthenticatedSupabase(user);
+                const { data, error } = await authSupabase.storage
                     .from('media')
                     .upload(filePath, photoFile, {
                         upsert: true
@@ -210,7 +211,7 @@ export default function ProfilePage() {
                     throw new Error('Failed to upload profile photo to Supabase.');
                 }
 
-                const { data: publicUrlData } = supabase.storage
+                const { data: publicUrlData } = authSupabase.storage
                     .from('media')
                     .getPublicUrl(filePath);
                 
