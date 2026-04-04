@@ -28,13 +28,37 @@ export interface UserProfile {
     role?: 'citizen' | 'official';
     department?: string;    // e.g. "Road", "Waste", "Water", "Sanitation"
     jurisdiction?: string;  // e.g. "Jalandhar"
+    isBlocked?: boolean;    // For Moderation
+    // Trust & Reputation
+    trustScore?: number;          // 0.0 – 1.0
+    trustStats?: {
+        resolvedReports?: number;
+        accurateVotes?: number;
+        flaggedReports?: number;
+        wrongVotes?: number;
+    };
+    // Gamification
+    xp?: number;
+    level?: number;
+    levelTitle?: string;
+    badges?: string[];            // Badge IDs
+    currentStreak?: number;
+    longestStreak?: number;
+    lastActiveDate?: string;      // 'YYYY-MM-DD'
+    gamificationStats?: {
+        totalReports?: number;
+        totalVerifications?: number;
+        totalComments?: number;
+        totalResolved?: number;
+    };
 }
 
 interface AuthContextType {
     user: User | null; // Firebase Auth User
     userProfile: UserProfile | null; // Firestore Profile
     loading: boolean;
-    isOfficial: boolean; // Computed: userProfile?.role === 'official'
+    isOfficial: boolean; // Computed: userProfile?.role === 'official' || isAdmin
+    isAdmin: boolean;
     sendMagicLink: (email: string) => Promise<void>;
     loginWithGoogleCredential: (idToken: string) => Promise<void>;
     loginWithGooglePopup: () => Promise<void>;
@@ -46,6 +70,7 @@ const AuthContext = createContext<AuthContextType>({
     userProfile: null,
     loading: true,
     isOfficial: false,
+    isAdmin: false,
     sendMagicLink: async () => { },
     loginWithGoogleCredential: async () => { },
     loginWithGooglePopup: async () => { },
@@ -86,9 +111,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             if (currentUser) {
                 // If logged in, listen to their Firestore profile for the 'handle'
                 const userDocRef = doc(db, 'users', currentUser.uid);
-                const unsubscribeFirestore = onSnapshot(userDocRef, (docSnap) => {
+                const unsubscribeFirestore = onSnapshot(userDocRef, async (docSnap) => {
                     if (docSnap.exists()) {
-                        setUserProfile(docSnap.data() as UserProfile);
+                        const profileData = docSnap.data() as UserProfile;
+                        if (profileData.isBlocked) {
+                            // User is suspended, sign them out immediately
+                            await signOut(auth);
+                            setUser(null);
+                            setUserProfile(null);
+                            setLoading(false);
+                            alert("Your account has been suspended for violating community guidelines.");
+                            return;
+                        }
+                        setUserProfile(profileData);
                     } else {
                         // Profile doesn't exist yet (will optionally be created in onboarding)
                         setUserProfile(null);
@@ -150,10 +185,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
-    const isOfficial = userProfile?.role === 'official';
+    const isAdmin = user?.email === 'hemanthreddya276@gmail.com';
+    const isOfficial = userProfile?.role === 'official' || isAdmin;
 
     return (
-        <AuthContext.Provider value={{ user, userProfile, loading, isOfficial, sendMagicLink, loginWithGoogleCredential, loginWithGooglePopup, logout }}>
+        <AuthContext.Provider value={{ user, userProfile, loading, isOfficial, isAdmin, sendMagicLink, loginWithGoogleCredential, loginWithGooglePopup, logout }}>
             {children}
         </AuthContext.Provider>
     );

@@ -2,8 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { X, Upload, CheckCircle, Loader2, Camera } from 'lucide-react';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/lib/firebase';
+import { supabase } from '@/lib/supabase';
 import { officialResolveIssue, Issue } from '@/lib/issues';
 import { useAuth } from '@/context/AuthContext';
 
@@ -37,10 +36,24 @@ export default function OfficialResolveModal({ issue, isOpen, onClose, onResolve
         if (!user || !userProfile || !afterFile || !statement.trim()) return;
         setSubmitting(true);
         try {
-            // Upload after image
-            const storageRef = ref(storage, `resolutions/${issue.id}/${Date.now()}_${afterFile.name}`);
-            await uploadBytes(storageRef, afterFile);
-            const afterImageUrl = await getDownloadURL(storageRef);
+            // Upload after image to Supabase
+            const uniqueName = Date.now() + '_' + afterFile.name.replace(/[^a-zA-Z0-9.\-_]/g, '');
+            const filePath = `resolutions/${issue.id}/${uniqueName}`;
+            
+            const { data, error } = await supabase.storage
+                .from('media')
+                .upload(filePath, afterFile);
+
+            if (error) {
+                console.error('Supabase upload error:', error);
+                throw new Error('Failed to upload resolution image to Supabase.');
+            }
+
+            const { data: publicUrlData } = supabase.storage
+                .from('media')
+                .getPublicUrl(filePath);
+                
+            const afterImageUrl = publicUrlData.publicUrl;
 
             await officialResolveIssue(
                 issue.id,

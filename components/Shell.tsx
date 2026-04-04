@@ -6,7 +6,6 @@ import Header from './Header';
 import BottomNav from './BottomNav';
 import ReportIssueDialog from './ReportIssueDialog';
 import OnboardingModal from './OnboardingModal';
-import DevRoleToggle from './DevRoleToggle';
 import NotificationBell from './NotificationBell';
 
 interface ShellProps {
@@ -62,7 +61,6 @@ export default function Shell({ children }: ShellProps) {
             />
 
             <OnboardingModal />
-            <DevRoleToggle />
         </div>
     );
 }

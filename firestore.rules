@@ -1,1 +1,104 @@
-rules_version = '2'; service cloud.firestore { match /databases/{database}/documents { match /{document=**} { allow read, write: if true; } } }
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      // Anyone can read a user profile (needed for displaying names on reports)
+      allow read: if isAuthenticated();
+      // Only the user themselves can write to their own profile, but they CANNOT update sensitive gamification fields.
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['xp', 'level', 'levelTitle', 'badges', 'gamificationStats', 'currentStreak', 'longestStreak', 'lastActiveDate']));
+      allow delete: if false; // Soft deletes preferred
+
+      // Vote rate-limiting log (anti-manipulation)
+      match /voteLog/{logId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+    }
+
+    // Issues Collection
+    match /issues/{issueId} {
+      allow read: if isAuthenticated(); // All authenticated users can read issues
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      
+      // Non-owners can only update social counters/status flags. Owners can update general fields (but not change ownership)
+      allow update: if isAuthenticated() && request.resource.data.userId == resource.data.userId && (
+        isOwner(resource.data.userId) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'savesCount', 'commentCount', 'sharesCount', 'statusData', 'status', 'flagCount', 'isHidden'])
+      );
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+
+      // Community flagging (anti-manipulation)
+      match /flags/{flagId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update, delete: if false;
+      }
+    }
+    
+    // Comments
+    match /comments/{commentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && isOwner(resource.data.userId);
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+
+    // Hypes / Upvotes
+    match /hypes/{hypeId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated() && hypeId.matches('.*_' + request.auth.uid + '.*');
+    }
+
+    // Saves
+    match /saves/{saveId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create, update, delete: if isAuthenticated() && isOwner(request.resource.data.userId);
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated(); // System or others can create notifications
+      allow update: if isAuthenticated() && isOwner(resource.data.userId); // Marking as read
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+    
+    // Feedbacks
+    match /feedbacks/{feedbackId} {
+      allow create: if isAuthenticated();
+      // Only admins should read, but we will simplify for now
+      allow read: if isAuthenticated();
+    }
+    
+    // User Reports
+    match /user_reports/{reportId} {
+      allow create: if isAuthenticated() && request.resource.data.reporterUid == request.auth.uid;
+      allow read: if isAuthenticated() && isOwner(resource.data.reporterUid);
+    }
+
+    // Missions
+    match /missions/{missionId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated(); // System creates; update for completion count
+      allow delete: if false;
+
+      // Mission Progress (per-user)
+      match /progress/{userId} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow create, update: if false; // Only server (Admin SDK) can update mission progress to prevent client manipulation
+        allow delete: if false;
+      }
+    }
+  }
+}

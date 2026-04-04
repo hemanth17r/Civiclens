@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Compass, BarChart3, User, Plus } from 'lucide-react';
+import { Home, Compass, Map, User, Plus } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface BottomNavProps {
@@ -13,7 +13,7 @@ interface BottomNavProps {
 const navItems = [
     { name: 'Home', href: '/', icon: Home },
     { name: 'Explore', href: '/explore', icon: Compass },
-    { name: 'Scorecard', href: '/scorecard', icon: BarChart3 },
+    { name: 'City Insights', href: '/scorecard', icon: Map },
     { name: 'Profile', href: '/profile', icon: User },
 ];
 
@@ -49,8 +49,8 @@ export default function BottomNav({ onReportClick }: BottomNavProps) {
 
                 {/* 4. Scorecard */}
                 <Link href="/scorecard" className={clsx("flex flex-col items-center w-16 gap-1 transition-colors", pathname === '/scorecard' ? "text-blue-600" : "text-gray-400")}>
-                    <BarChart3 size={24} strokeWidth={pathname === '/scorecard' ? 2.5 : 2} />
-                    <span className="font-medium">Scorecard</span>
+                    <Map size={24} strokeWidth={pathname === '/scorecard' ? 2.5 : 2} />
+                    <span className="font-medium">City Insights</span>
                 </Link>
 
                 {/* 5. Profile */}

@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { MapPin, Flame, MessageCircle, Bookmark, User, Share2, BookmarkCheck, CheckCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { clsx } from 'clsx';
-import { Issue, IssueStatusState, hypeIssue, unhypeIssue, hasUserHyped, saveIssue, unsaveIssue, hasUserSaved } from '@/lib/issues';
+import { Issue, hypeIssue, unhypeIssue, hasUserHyped, saveIssue, unsaveIssue, hasUserSaved } from '@/lib/issues';
 import AuthModule from './AuthModule';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -13,7 +13,6 @@ import Link from 'next/link';
 import HeartAnimation from './HeartAnimation';
 import CommentDrawer from './CommentDrawer';
 import ShareModal from './ShareModal';
-import StatusVoteModal from './StatusVoteModal';
 import VerifiedBadge from './VerifiedBadge';
 
 interface IssueCardProps {
@@ -35,8 +34,26 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
     const [isCommentOpen, setIsCommentOpen] = useState(false);
     const [isShareOpen, setIsShareOpen] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
-    const [isVoteModalOpen, setIsVoteModalOpen] = useState(false);
-    const [voteTargetStatus, setVoteTargetStatus] = useState<IssueStatusState | null>(null);
+    const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
+    const mediaContainerRef = React.useRef<HTMLDivElement>(null);
+
+    const mediaList = issue.mediaUrls && issue.mediaUrls.length > 0
+        ? issue.mediaUrls
+        : issue.imageUrl
+            ? [issue.imageUrl]
+            : [];
+
+    const handleScroll = () => {
+        if (mediaContainerRef.current) {
+            const scrollLeft = mediaContainerRef.current.scrollLeft;
+            const width = mediaContainerRef.current.clientWidth;
+            const newIndex = Math.round(scrollLeft / width);
+            if (newIndex !== currentMediaIndex) {
+                setCurrentMediaIndex(newIndex);
+            }
+        }
+    };
+
 
     // Load hype/save state from Firestore on mount
     useEffect(() => {
@@ -63,8 +80,23 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
     const getStatusColor = (status: string = 'Open') => {
         switch (status) {
             case 'Resolved': return 'bg-[#34A853] text-white';
+            case 'Action Seen':
             case 'In Progress': return 'bg-[#FBBC05] text-white';
-            case 'Open': default: return 'bg-gray-800 text-white';
+            case 'Active': return 'bg-blue-600 text-white';
+            case 'Verified': return 'bg-teal-500 text-white';
+            case 'Verification Needed':
+            case 'Under Review': return 'bg-purple-600 text-white';
+            case 'Reported':
+            case 'Open': default: return 'bg-black text-white';
+        }
+    };
+
+    const getDisplayStatus = (status: string = 'Open') => {
+        switch (status) {
+            case 'Open': return 'Reported';
+            case 'Under Review': return 'Verification Needed';
+            case 'In Progress': return 'Active';
+            default: return status;
         }
     };
 
@@ -125,20 +157,10 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
 
     const handleStatusClick = (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (issue.status === 'Resolved') return;
-
-        let target: IssueStatusState | 'Resolved' = issue.status;
-        if (issue.status === 'Open') target = 'Under Review';
-        if (issue.status === 'Under Review') target = 'In Progress';
-        if (issue.status === 'In Progress') target = 'Resolved';
-
-        setVoteTargetStatus(target as IssueStatusState);
-        setIsVoteModalOpen(true);
+        router.push(`/issue/${issue.id}`);
     };
 
-    const handleVoteComplete = (newStatusData: any, newStatus?: string) => {
-        // Realtime listeners update the feed automatically
-    };
+
 
     return (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden break-inside-avoid relative">
@@ -146,7 +168,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
             {/* 1. Header: Instagram style */}
             <div className="flex items-center justify-between p-3.5">
                 <div className="flex items-center gap-3">
-                    <Link href="/profile" className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-400 to-purple-400 p-[2px] block cursor-pointer hover:opacity-90 transition-opacity">
+                    <Link href={`/profile/${issue.userId}`} className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-400 to-purple-400 p-[2px] block cursor-pointer hover:opacity-90 transition-opacity">
                         <div className="w-full h-full rounded-full border-2 border-white bg-gray-100 overflow-hidden text-gray-400 flex items-center justify-center">
                             {issue.userAvatar ? (
                                 <img src={issue.userAvatar} alt="Avatar" className="w-full h-full object-cover" />
@@ -180,21 +202,62 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
 
             {/* 2. Media: 1:1 Aspect Ratio & Double Tap */}
             <div
-                className="aspect-square w-full bg-gray-100 relative overflow-hidden group cursor-pointer"
+                className="aspect-square w-full bg-gray-100 relative group overflow-hidden"
                 onDoubleClick={handleDoubleTap}
-                onClick={() => router.push(`/issue/${issue.id}`)}
             >
-                {issue.imageUrl ? (
-                    <img
-                        src={issue.imageUrl}
-                        alt={issue.title}
-                        className="w-full h-full object-cover select-none"
-                        loading="lazy"
-                        onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            e.currentTarget.parentElement?.classList.add('bg-gray-100');
-                        }}
-                    />
+                {mediaList.length > 0 ? (
+                    <>
+                        <div
+                            ref={mediaContainerRef}
+                            onScroll={handleScroll}
+                            className="flex w-full h-full overflow-x-auto snap-x snap-mandatory scrollbar-none"
+                            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                        >
+                            {mediaList.map((mediaUrl, idx) => (
+                                <div key={idx} className="w-full h-full flex-shrink-0 snap-center relative">
+                                    {mediaUrl.match(/\.(mp4|webm|ogg|mov)(\?|$)/i) ? (
+                                        <video
+                                            src={mediaUrl}
+                                            controls
+                                            className="w-full h-full object-cover select-none"
+                                            onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                                e.currentTarget.parentElement?.classList.add('bg-gray-100');
+                                            }}
+                                        />
+                                    ) : (
+                                        <img
+                                            src={mediaUrl}
+                                            alt={`${issue.title} - ${idx + 1}`}
+                                            className="w-full h-full object-cover select-none"
+                                            loading="lazy"
+                                            onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                                e.currentTarget.parentElement?.classList.add('bg-gray-100');
+                                            }}
+                                        />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Carousel Dots */}
+                        {mediaList.length > 1 && (
+                            <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 z-20">
+                                {mediaList.map((_, idx) => (
+                                    <div
+                                        key={idx}
+                                        className={clsx(
+                                            "h-1.5 rounded-full transition-all duration-300 shadow-sm",
+                                            currentMediaIndex === idx
+                                                ? "w-4 bg-blue-500"
+                                                : "w-1.5 bg-white/70"
+                                        )}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </>
                 ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 gap-2 bg-gray-50">
                         <MapPin size={48} className="opacity-20" />
@@ -204,17 +267,15 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                 {/* Heart Animation Overlay */}
                 <HeartAnimation isVisible={showHeartAnim} />
 
-                {/* Status Pill */}
+                {/* Status Pill — shows current status, links to timeline */}
                 <div className="absolute top-4 right-4 z-10">
                     <button
                         onClick={handleStatusClick}
                         className={clsx(
-                            "px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md backdrop-blur-md transition-all active:scale-95 border border-white/20 flex items-center gap-1",
-                            getStatusColor(issue.status),
-                            issue.status !== 'Resolved' && "hover:opacity-90 cursor-pointer"
+                            "px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md backdrop-blur-md transition-all active:scale-95 border border-white/20 flex items-center gap-1 cursor-pointer hover:opacity-90",
+                            getStatusColor(issue.status)
                         )}>
-                        {issue.status}
-                        {issue.status !== 'Resolved' && <span className="text-[8px] bg-white/20 px-1 rounded ml-1">VOTE</span>}
+                        {getDisplayStatus(issue.status)}
                     </button>
                 </div>
             </div>
@@ -240,13 +301,19 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                         className="flex items-center gap-1.5 text-gray-900 hover:text-blue-600 transition-colors"
                     >
                         <MessageCircle size={26} className="text-gray-900" />
+                        {(issue.commentCount ?? 0) > 0 && (
+                            <span className="text-xs font-semibold text-gray-700">{issue.commentCount}</span>
+                        )}
                     </button>
 
                     <button
                         onClick={() => setIsShareOpen(true)}
-                        className="text-gray-900 hover:text-blue-600 transition-colors"
+                        className="flex items-center gap-1.5 text-gray-900 hover:text-blue-600 transition-colors"
                     >
                         <Share2 size={24} />
+                        {(issue.sharesCount ?? 0) > 0 && (
+                            <span className="text-xs font-semibold text-gray-700">{issue.sharesCount}</span>
+                        )}
                     </button>
                 </div>
             </div>
@@ -280,8 +347,14 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                     {/* Header Strip */}
                     <div className="bg-emerald-600 px-3 py-1.5 flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-bold text-white uppercase tracking-wider">Official MCD Update</span>
-                            <VerifiedBadge department={issue.resolvedByDepartment || 'MCD'} size="sm" />
+                            <span className="text-[10px] font-bold text-white uppercase tracking-wider">
+                                {issue.resolvedByHandle === 'ahr' ? 'Admin Update' : 'Official MCD Update'}
+                            </span>
+                            <VerifiedBadge 
+                                department={issue.resolvedByDepartment || 'MCD'} 
+                                size="sm" 
+                                label={issue.resolvedByHandle === 'ahr' ? 'Admin' : 'Official'}
+                            />
                         </div>
                         <span className="text-[10px] text-emerald-100 font-medium">
                             {issue.resolvedAt ? formatDistanceToNow(issue.resolvedAt.toDate(), { addSuffix: true }) : 'Recently'}
@@ -344,15 +417,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                 issueTitle={issue.title}
             />
 
-            {voteTargetStatus && (
-                <StatusVoteModal
-                    isOpen={isVoteModalOpen}
-                    onClose={() => setIsVoteModalOpen(false)}
-                    issue={issue}
-                    targetStatus={voteTargetStatus}
-                    onVoteComplete={handleVoteComplete}
-                />
-            )}
+
         </div>
     );
 };

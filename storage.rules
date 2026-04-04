@@ -4,16 +4,18 @@ service firebase.storage {
     // Issue photos: authenticated users can upload images up to 10MB
     match /issue_photos/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
+      allow create: if request.auth != null
                    && request.resource.size < 10 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
     }
     // Resolution photos: authenticated users can upload images up to 10MB
     match /resolution_photos/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
+      allow create: if request.auth != null
                    && request.resource.size < 10 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
     }
     // Deny all other paths
     match /{allPaths=**} {

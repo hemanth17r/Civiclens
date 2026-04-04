@@ -1,19 +1,104 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MapPin, Calendar, Edit2, ShieldAlert, AlertCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Edit2, ShieldAlert, AlertCircle, Info, Users, CheckCircle2, Eye, Wrench, Clock } from 'lucide-react';
 import { clsx } from 'clsx';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
-import StatusVoteModal from '@/components/StatusVoteModal';
-import { getIssueById, Issue, IssueStatusState } from '@/lib/issues';
+import StageVoteCard from '@/components/StageVoteCard';
+import { getIssueById, Issue, IssueStatusState, normalizeStatus, voteOnStatus, STATUS_DB_KEYS } from '@/lib/issues';
+
+// ═══════════════════════════════════════════════════════════════════════
+// LIFECYCLE CONFIGURATION — 6-stage progression
+// ═══════════════════════════════════════════════════════════════════════
+
+interface LifecycleStage {
+    key: string;
+    label: string;
+    description: string;
+    icon: React.ReactNode;
+    color: string;         // primary color
+    bgColor: string;       // light background
+    borderColor: string;   // border when active
+    canVote: boolean;      // whether users can vote to verify
+}
+
+const LIFECYCLE_STAGES: LifecycleStage[] = [
+    {
+        key: 'Reported',
+        label: 'Reported',
+        description: 'User submitted this issue',
+        icon: <AlertCircle size={16} />,
+        color: '#374151',
+        bgColor: '#F3F4F6',
+        borderColor: '#9CA3AF',
+        canVote: false,
+    },
+    {
+        key: 'Verification Needed',
+        label: 'Verification Needed',
+        description: 'Waiting for community confirmation',
+        icon: <Users size={16} />,
+        color: '#7C3AED',
+        bgColor: '#F5F3FF',
+        borderColor: '#8B5CF6',
+        canVote: true,
+    },
+    {
+        key: 'Verified',
+        label: 'Verified',
+        description: 'Trust-weighted votes confirmed this issue',
+        icon: <CheckCircle2 size={16} />,
+        color: '#0D9488',
+        bgColor: '#F0FDFA',
+        borderColor: '#14B8A6',
+        canVote: false,
+    },
+    {
+        key: 'Active',
+        label: 'Active',
+        description: 'Issue is awaiting action',
+        icon: <Eye size={16} />,
+        color: '#2563EB',
+        bgColor: '#EFF6FF',
+        borderColor: '#3B82F6',
+        canVote: true,
+    },
+    {
+        key: 'Action Seen',
+        label: 'Action Seen',
+        description: 'Work activity has been detected',
+        icon: <Wrench size={16} />,
+        color: '#D97706',
+        bgColor: '#FFFBEB',
+        borderColor: '#F59E0B',
+        canVote: true,
+    },
+    {
+        key: 'Resolved',
+        label: 'Resolved',
+        description: 'Issue has been fixed and confirmed',
+        icon: <CheckCircle2 size={16} />,
+        color: '#059669',
+        bgColor: '#ECFDF5',
+        borderColor: '#10B981',
+        canVote: true,
+    },
+];
+
+// Map legacy statuses to lifecycle index
+function getStageIndex(status: string): number {
+    const normalized = normalizeStatus(status);
+    const idx = LIFECYCLE_STAGES.findIndex(s => s.key === normalized);
+    return idx >= 0 ? idx : 0;
+}
 
 export default function IssueDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
     const { user } = useAuth();
-    const [isVoteModalOpen, setIsVoteModalOpen] = useState(false);
-    const [voteTargetStatus, setVoteTargetStatus] = useState<IssueStatusState | null>(null);
+    const [votingStageKey, setVotingStageKey] = useState<string | null>(null);
+    const [showVerifiedInfo, setShowVerifiedInfo] = useState(false);
 
     const unwrappedParams = React.use(params);
     const issueId = unwrappedParams.id;
@@ -46,29 +131,36 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
         return () => { cancelled = true; };
     }, [issueId]);
 
-    const getSteps = (currentStatus: IssueStatusState) => {
-        const createdAt = issue?.createdAt;
-        const timeAgo = createdAt?.toDate
-            ? formatDistanceToNow(createdAt.toDate(), { addSuffix: true })
-            : 'Recently';
+    const handleInlineVote = async (targetStageKey: string, voteType: 'yes' | 'no') => {
+        if (!user || user.isAnonymous) {
+            router.push('/login');
+            return;
+        }
 
-        return [
-            { status: 'Reported', date: timeAgo, done: true },
-            { status: 'Under Review', date: currentStatus === 'Under Review' || currentStatus === 'In Progress' || currentStatus === 'Resolved' ? 'Verified' : 'Pending', done: currentStatus === 'Under Review' || currentStatus === 'In Progress' || currentStatus === 'Resolved' },
-            { status: 'In Progress', date: currentStatus === 'In Progress' || currentStatus === 'Resolved' ? 'Verified' : 'Pending', done: currentStatus === 'In Progress' || currentStatus === 'Resolved' },
-            { status: 'Resolved', date: currentStatus === 'Resolved' ? 'Confirmed' : 'Pending', done: currentStatus === 'Resolved' },
-        ];
-    };
-
-    const handleStatusClick = (status: string) => {
-        if (status === 'Reported' || status === 'Open') return;
-        setVoteTargetStatus(status as IssueStatusState);
-        setIsVoteModalOpen(true);
-    };
-
-    const handleVoteComplete = (_newStatusData: any, newStatus?: string) => {
-        if (newStatus && issue) {
-            setIssue(prev => prev ? { ...prev, status: newStatus as IssueStatusState } : prev);
+        setVotingStageKey(targetStageKey);
+        try {
+            const res = await voteOnStatus(issueId, user.uid, targetStageKey as IssueStatusState, voteType);
+            if (res.success) {
+                setIssue(prev => {
+                    if (!prev) return prev;
+                    const dbKey = STATUS_DB_KEYS[targetStageKey];
+                    const newStatusData = { ...prev.statusData };
+                    if (dbKey && res.currentStats) {
+                        newStatusData[dbKey] = res.currentStats;
+                    }
+                    return {
+                        ...prev,
+                        statusData: newStatusData,
+                        status: res.consensusReached && res.newStatus ? res.newStatus : prev.status
+                    };
+                });
+            } else {
+                alert(res.error || 'Failed to record vote');
+            }
+        } catch (e: any) {
+            alert(e.message || 'Error recording vote');
+        } finally {
+            setVotingStageKey(null);
         }
     };
 
@@ -90,7 +182,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                     <div className="h-4 w-1/2 bg-gray-100 animate-pulse rounded-lg" />
                     <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 space-y-5">
                         <div className="h-5 w-40 bg-gray-100 animate-pulse rounded" />
-                        {[1, 2, 3, 4].map(i => (
+                        {[1, 2, 3, 4, 5, 6].map(i => (
                             <div key={i} className="flex items-center gap-4">
                                 <div className="w-4 h-4 bg-gray-200 rounded-full animate-pulse" />
                                 <div className="space-y-1.5">
@@ -127,10 +219,62 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     }
 
     // ── Computed values ──────────────────────────────────────────────────────
-    const steps = getSteps(issue.status);
+    const currentStageIdx = getStageIndex(issue.status);
     const timeAgo = issue.createdAt?.toDate
         ? formatDistanceToNow(issue.createdAt.toDate(), { addSuffix: true })
         : 'Recently';
+
+    // Build timeline entries from available data
+    const timelineEntries: { date: string; label: string; color: string }[] = [];
+    const baseDate = issue.createdAt?.toDate ? issue.createdAt.toDate().getTime() : Date.now() - 86400000 * 7;
+
+    timelineEntries.push({
+        date: format(new Date(baseDate), 'MMM d'),
+        label: 'Issue reported',
+        color: LIFECYCLE_STAGES[0].color,
+    });
+
+    if (currentStageIdx >= 1) {
+        const d = issue.approvedAt?.toDate ? issue.approvedAt.toDate() : new Date(baseDate + 86400000 * 1);
+        timelineEntries.push({
+            date: format(d, 'MMM d'),
+            label: 'Verification started',
+            color: LIFECYCLE_STAGES[1].color,
+        });
+    }
+    if (currentStageIdx >= 2) {
+        // Fallback or exact dates could be pulled from statusData historically, using sequential offsets for now
+        const d = new Date(baseDate + 86400000 * 2);
+        timelineEntries.push({
+            date: format(d, 'MMM d'),
+            label: 'Verified by community',
+            color: LIFECYCLE_STAGES[2].color,
+        });
+    }
+    if (currentStageIdx >= 3) {
+        const d = new Date(baseDate + 86400000 * 3);
+        timelineEntries.push({
+            date: format(d, 'MMM d'),
+            label: 'Marked as active/ongoing',
+            color: LIFECYCLE_STAGES[3].color,
+        });
+    }
+    if (currentStageIdx >= 4) {
+        const d = new Date(baseDate + 86400000 * 5);
+        timelineEntries.push({
+            date: format(d, 'MMM d'),
+            label: 'Action activity detected',
+            color: LIFECYCLE_STAGES[4].color,
+        });
+    }
+    if (currentStageIdx >= 5) {
+        const d = issue.resolvedAt?.toDate ? issue.resolvedAt.toDate() : new Date(baseDate + 86400000 * 7);
+        timelineEntries.push({
+            date: format(d, 'MMM d'),
+            label: 'Issue resolved',
+            color: LIFECYCLE_STAGES[5].color,
+        });
+    }
 
     return (
         <div className="bg-white min-h-screen pb-20">
@@ -169,50 +313,152 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                     </span>
                 </div>
 
-                {/* Status Timeline */}
-                <div className="bg-gray-50 rounded-3xl p-6 mb-8 border border-gray-100 relative">
+                {/* ── ISSUE LIFECYCLE SYSTEM ────────────────────────────────── */}
+                <div className="bg-gray-50 rounded-3xl p-6 mb-6 border border-gray-100 relative">
+                    {/* Header Row */}
                     <div className="flex items-center justify-between mb-6">
-                        <h3 className="font-bold text-gray-900">Status Verification</h3>
-                        <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-blue-500 bg-blue-50 px-3 py-1.5 rounded-full">
-                            <ShieldAlert size={14} /> Crowdsourced
+                        <div>
+                            <h3 className="font-bold text-gray-900 text-lg">Issue Lifecycle</h3>
+                            <p className="text-xs text-gray-400 mt-0.5">Each issue moves through defined stages</p>
+                        </div>
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowVerifiedInfo(v => !v)}
+                                className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full hover:bg-emerald-100 transition-colors cursor-pointer"
+                                aria-expanded={showVerifiedInfo}
+                                aria-label="Learn about Community Verified status"
+                            >
+                                <ShieldAlert size={14} className="mb-0.5" /> Community Verified
+                            </button>
+                            {showVerifiedInfo && (
+                                <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-emerald-100 rounded-2xl shadow-xl p-4 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <ShieldAlert size={14} className="text-emerald-600 flex-shrink-0" />
+                                        <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Community Verified</span>
+                                    </div>
+                                    <p className="text-xs text-gray-600 leading-relaxed">
+                                        This badge means the community has collectively confirmed this issue is real through trust-weighted voting. Each vote carries a weight based on the voter&apos;s trust score, and a net score above +2 advances the issue to the next stage.
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                                        Tap again to close this info panel.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    <div className="relative border-l-2 border-gray-200 ml-3 space-y-6">
-                        {steps.map((step, idx) => (
-                            <div key={idx} className="relative pl-8 group">
-                                <div className={clsx(
-                                    "absolute -left-[9px] top-1 w-4 h-4 rounded-full border-2 transition-colors",
-                                    step.done ? "bg-blue-500 border-blue-500" : "bg-white border-gray-300"
-                                )} />
+                    {/* ── STAGES TIMELINE ─────────────────────────────────── */}
+                    <div className="relative ml-1">
+                        {LIFECYCLE_STAGES.map((stage, idx) => {
+                            const isDone = idx <= currentStageIdx;
+                            const isCurrent = idx === currentStageIdx;
+                            const isNext = idx === currentStageIdx + 1;
+                            const isLast = idx === LIFECYCLE_STAGES.length - 1;
 
-                                {/* Status Row — NO layout-shifting hover */}
-                                <div
-                                    className={clsx(
-                                        "flex items-center justify-between rounded-xl px-3 py-2 transition-colors cursor-pointer",
-                                        step.status !== 'Reported' && "hover:bg-gray-100/80"
+                            return (
+                                <div key={stage.key} className="relative">
+                                    {/* Connector line */}
+                                    {!isLast && (
+                                        <div
+                                            className="absolute left-[15px] top-[36px] w-0.5 h-[calc(100%-4px)]"
+                                            style={{
+                                                backgroundColor: isDone && idx < currentStageIdx ? stage.color : '#E5E7EB',
+                                            }}
+                                        />
                                     )}
-                                    onClick={() => handleStatusClick(step.status)}
-                                    title={step.status !== 'Reported' ? `Click to verify if the issue is ${step.status}` : undefined}
-                                >
-                                    <div>
-                                        <p className={clsx("font-semibold text-sm", step.done ? "text-gray-900" : "text-gray-400")}>
-                                            {step.status}
-                                        </p>
-                                        <p className="text-xs text-gray-400 font-medium">{step.date}</p>
-                                    </div>
 
-                                    {/* Edit Hover Icon */}
-                                    {step.status !== 'Reported' && (
-                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-gray-400">
-                                            <Edit2 size={14} />
+                                    {/* Stage Row */}
+                                    <div
+                                        className={clsx(
+                                            "flex items-start gap-4 py-3 px-3 rounded-2xl transition-all",
+                                            isCurrent && "bg-white shadow-sm border",
+                                            !isDone && !isNext && "opacity-50",
+                                        )}
+                                        style={isCurrent ? { borderColor: stage.borderColor + '40' } : undefined}
+                                    >
+                                        {/* Circle Indicator */}
+                                        <div
+                                            className={clsx(
+                                                "w-[30px] h-[30px] rounded-full flex items-center justify-center flex-shrink-0 transition-all",
+                                                isCurrent && "ring-4 ring-offset-1",
+                                            )}
+                                            style={{
+                                                backgroundColor: isDone ? stage.color : '#F3F4F6',
+                                                color: isDone ? 'white' : '#9CA3AF',
+                                                ...(isCurrent ? { ringColor: stage.color + '30' } : {}),
+                                            }}
+                                        >
+                                            {stage.icon}
                                         </div>
-                                    )}
+
+                                        {/* Text content */}
+                                        <div className="flex-1 min-w-0 pt-0.5">
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    className={clsx(
+                                                        "font-bold text-sm",
+                                                        isDone ? "text-gray-900" : "text-gray-400",
+                                                    )}
+                                                >
+                                                    {stage.label}
+                                                </span>
+                                                {isCurrent && (
+                                                    <span
+                                                        className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                                                        style={{
+                                                            backgroundColor: stage.bgColor,
+                                                            color: stage.color,
+                                                        }}
+                                                    >
+                                                        Current
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className={clsx(
+                                                "text-xs mt-0.5",
+                                                isDone ? "text-gray-500" : "text-gray-300",
+                                            )}>
+                                                {stage.description}
+                                            </p>
+                                            
+                                            {/* Render Inline Vote Card for the CURRENT stage when it requires community voting */}
+                                            {isCurrent && stage.canVote && (
+                                                <StageVoteCard 
+                                                    stage={stage}
+                                                    yesWeight={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.yesWeight || 0}
+                                                    noWeight={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.noWeight || 0}
+                                                    score={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.score || 0}
+                                                    isVoting={votingStageKey === stage.key}
+                                                    onVote={(type) => handleInlineVote(stage.key, type)}
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
+
+                {/* ── PUBLIC TIMELINE ────────────────────────────────────── */}
+                {timelineEntries.length > 0 && (
+                    <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Clock size={16} className="text-gray-400" />
+                            <h3 className="font-bold text-gray-900 text-sm">Public Timeline</h3>
+                            <span className="text-[10px] text-gray-400 font-medium">Transparency builds trust</span>
+                        </div>
+                        <div className="space-y-3">
+                            {timelineEntries.map((entry, idx) => (
+                                <div key={idx} className="flex items-center gap-3">
+                                    <span className="text-xs font-bold text-gray-500 w-14 flex-shrink-0">{entry.date}</span>
+                                    <span className="text-gray-300">→</span>
+                                    <span className="text-sm text-gray-700 font-medium">{entry.label}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Description */}
                 {issue.description && (
@@ -259,15 +505,6 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                 )}
             </div>
 
-            {voteTargetStatus && (
-                <StatusVoteModal
-                    isOpen={isVoteModalOpen}
-                    onClose={() => setIsVoteModalOpen(false)}
-                    issue={issue}
-                    targetStatus={voteTargetStatus}
-                    onVoteComplete={handleVoteComplete}
-                />
-            )}
         </div>
     );
 }
