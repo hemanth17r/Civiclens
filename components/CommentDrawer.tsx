@@ -12,6 +12,7 @@ import {
     likeComment, unlikeComment, hasUserLikedComment,
     CommentData, ReplyData
 } from '@/lib/issues';
+import Link from 'next/link';
 
 interface CommentDrawerProps {
     isOpen: boolean;
@@ -25,7 +26,7 @@ interface CommentWithReplies extends CommentData {
 }
 
 export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawerProps) {
-    const { user, userProfile, isOfficial } = useAuth();
+    const { user, userProfile, isOfficial, isAdmin } = useAuth();
     const [commentText, setCommentText] = useState("");
     const [replyingTo, setReplyingTo] = useState<{ id: string, user: string } | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -111,7 +112,7 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
             setReplyingTo(null);
         } else {
             // Add as a top-level comment
-            const commentId = await addComment(issueId, user.uid, commentText, handle, avatar, isOfficial, userProfile?.department);
+            const commentId = await addComment(issueId, user.uid, commentText, handle, avatar, isOfficial, isAdmin, userProfile?.department);
             if (commentId) {
                 const newComment: CommentWithReplies = {
                     id: commentId,
@@ -199,17 +200,21 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                             ) : (
                                 comments.map((c) => (
                                     <div key={c.id} className="flex gap-3">
-                                        <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs flex-shrink-0 mt-1 overflow-hidden">
+                                        <Link href={`/profile/${c.userId}`} className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs flex-shrink-0 mt-1 overflow-hidden hover:opacity-80 transition-opacity">
                                             {c.userAvatar ? (
                                                 <img src={c.userAvatar} alt="" className="w-full h-full object-cover" />
                                             ) : (
                                                 c.userHandle?.replace('@', '').substring(0, 1).toUpperCase() || 'U'
                                             )}
-                                        </div>
+                                        </Link>
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="font-bold text-[13px] text-gray-900">{c.userHandle}</span>
-                                                {c.isOfficial && <VerifiedBadge department={c.department} size="sm" />}
+                                                <Link href={`/profile/${c.userId}`} className="font-bold text-[13px] text-gray-900 hover:underline">{c.userHandle}</Link>
+                                                {(c.isAdmin || c.userHandle === '@ahr') ? (
+                                                    <VerifiedBadge label="Admin" size="sm" />
+                                                ) : c.isOfficial ? (
+                                                    <VerifiedBadge department={c.department} size="sm" />
+                                                ) : null}
                                                 <span className="text-xs text-gray-400 font-medium">{formatTime(c.createdAt)}</span>
                                             </div>
                                             <p className="text-gray-800 text-sm mt-0.5 leading-snug">{c.text}</p>
@@ -236,20 +241,20 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                                                 <div className="mt-3 space-y-4">
                                                     {c.replies.map(r => (
                                                         <div key={r.id} className="flex gap-3">
-                                                            <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-[10px] flex-shrink-0 mt-0.5 overflow-hidden">
+                                                            <Link href={`/profile/${r.userId}`} className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-[10px] flex-shrink-0 mt-0.5 overflow-hidden hover:opacity-80 transition-opacity">
                                                                 {r.userAvatar ? (
                                                                     <img src={r.userAvatar} alt="" className="w-full h-full object-cover" />
                                                                 ) : (
                                                                     r.userHandle?.replace('@', '').substring(0, 1).toUpperCase() || 'U'
                                                                 )}
-                                                            </div>
+                                                            </Link>
                                                             <div className="flex-1">
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="font-bold text-[13px] text-gray-900">{r.userHandle}</span>
+                                                                    <Link href={`/profile/${r.userId}`} className="font-bold text-[13px] text-gray-900 hover:underline">{r.userHandle}</Link>
                                                                     <span className="text-xs text-gray-400 font-medium">{formatTime(r.createdAt)}</span>
                                                                 </div>
                                                                 <p className="text-gray-800 text-sm leading-snug mt-0.5">
-                                                                    <span className="text-blue-600 font-medium mr-1">{c.userHandle}</span>
+                                                                    <Link href={`/profile/${c.userId}`} className="text-blue-600 font-medium mr-1 hover:underline">{c.userHandle}</Link>
                                                                     {r.text}
                                                                 </p>
                                                                 <div className="flex items-center gap-4 mt-1.5">

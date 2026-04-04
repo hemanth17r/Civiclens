@@ -60,14 +60,30 @@ export default function OnboardingModal() {
         setIsSubmitting(true);
 
         try {
-            await setDoc(doc(db, 'users', user.uid), {
+            const role = 'citizen';
+
+            const profileData: Record<string, any> = {
                 uid: user.uid,
                 email: user.email,
                 displayName: user.displayName || 'Anonymous',
                 photoURL: user.photoURL,
                 handle: `@${handle}`,
+                role,
                 createdAt: serverTimestamp(),
-            });
+                // Trust & Reputation defaults
+                trustScore: 0.3,
+                trustStats: { resolvedReports: 0, accurateVotes: 0, flaggedReports: 0, wrongVotes: 0 },
+                // Gamification defaults
+                xp: 0,
+                level: 1,
+                levelTitle: 'Observer',
+                badges: [],
+                currentStreak: 0,
+                longestStreak: 0,
+                gamificationStats: { totalReports: 0, totalVerifications: 0, totalComments: 0, totalResolved: 0 },
+            };
+
+            await setDoc(doc(db, 'users', user.uid), profileData);
             // Profile updates, Modal will disappear via AuthContext listener
         } catch (err: any) {
             console.error(err);

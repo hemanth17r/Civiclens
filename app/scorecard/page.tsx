@@ -1,31 +1,47 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 import {
-    getDepartmentStats, DepartmentStat,
-    getFastestResolved, getMostHypedUnresolved, Issue
+    getTopInProgressByCity, getTopResolvedByCity, Issue
 } from '@/lib/issues';
-import { Loader2, Trophy, AlertTriangle, TrendingUp, TrendingDown, Minus, Clock, Flame, MapPin, CheckCircle, ShieldCheck } from 'lucide-react';
+import { getTopContributorsByCity } from '@/lib/users';
+import { UserProfile } from '@/context/AuthContext';
+import { 
+    Loader2, AlertTriangle, Clock, Flame, MapPin, 
+    CheckCircle, ShieldCheck, Info, X, Map, Trophy, 
+    User as UserIcon, ExternalLink 
+} from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import Link from 'next/link';
 
-export default function ScorecardPage() {
-    const [stats, setStats] = useState<DepartmentStat[]>([]);
-    const [fame, setFame] = useState<Issue[]>([]);
-    const [shame, setShame] = useState<Issue[]>([]);
+export default function CityInsightsPage() {
+    const { userProfile } = useAuth();
+    const router = useRouter();
+
+    // Data states
+    const [inProgressIssues, setInProgressIssues] = useState<Issue[]>([]);
+    const [resolvedIssues, setResolvedIssues] = useState<Issue[]>([]);
+    const [topContributors, setTopContributors] = useState<UserProfile[]>([]);
+
     const [loading, setLoading] = useState(true);
 
+    const userCity = userProfile?.city || 'Delhi';
+
     useEffect(() => {
+        setLoading(true);
         Promise.all([
-            getDepartmentStats(),
-            getFastestResolved(5),
-            getMostHypedUnresolved(5)
-        ]).then(([s, f, sh]) => {
-            setStats(s);
-            setFame(f);
-            setShame(sh);
+            getTopInProgressByCity(userCity, 5),
+            getTopResolvedByCity(userCity, 5),
+            getTopContributorsByCity(userCity, 5)
+        ]).then(([ip, res, contributors]) => {
+            setInProgressIssues(ip);
+            setResolvedIssues(res);
+            setTopContributors(contributors);
         }).catch(console.error)
             .finally(() => setLoading(false));
-    }, []);
+    }, [userCity]);
 
     if (loading) {
         return (
@@ -35,168 +51,178 @@ export default function ScorecardPage() {
         );
     }
 
+    const renderLeaderboard = () => {
+        if (topContributors.length === 0) {
+            return <div className="p-8 text-center text-gray-400 text-sm italic py-10">No contributors yet in this city.</div>;
+        }
+
+        return (
+            <div className="divide-y divide-gray-50">
+                {topContributors.map((contributor, idx) => {
+                    const rankEmojis = ['🥇', '🥈', '🥉'];
+                    const isTop3 = idx < 3;
+
+                    return (
+                        <Link 
+                            key={contributor.uid}
+                            href={`/profile/${contributor.handle || ''}`}
+                            className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors group cursor-pointer"
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className="w-8 flex justify-center text-lg font-bold text-gray-400">
+                                    {isTop3 ? rankEmojis[idx] : idx + 1}
+                                </div>
+                                <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-100 overflow-hidden shadow-sm flex-shrink-0">
+                                    {contributor.photoURL ? (
+                                        <img src={contributor.photoURL} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                            <UserIcon size={20} />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex flex-col">
+                                    <div className="flex items-center gap-2">
+                                        <p className="font-bold text-sm text-gray-900 group-hover:text-amber-600 transition-colors">
+                                            {contributor.displayName || 'Contributor'}
+                                        </p>
+                                        <ExternalLink size={12} className="text-gray-300 opacity-0 group-hover:opacity-100 transition-all" />
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                            {contributor.levelTitle || 'Citizen'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-end">
+                                <p className="text-sm font-black text-gray-900">{contributor.xp || 0}</p>
+                                <p className="text-[10px] uppercase tracking-tighter font-bold text-gray-400">XP Points</p>
+                            </div>
+                        </Link>
+                    );
+                })}
+            </div>
+        );
+    };
+
+    const renderIssueList = (issues: Issue[], emptyMessage: string, type: 'in_progress' | 'resolved') => {
+        if (issues.length === 0) {
+            return <div className="p-8 text-center text-gray-400 text-sm italic py-10">{emptyMessage}</div>;
+        }
+
+        return (
+            <div className="divide-y divide-gray-50">
+                {issues.map(issue => {
+                    const createdMs = issue.createdAt?.toMillis?.() || Date.now();
+                    const age = formatDistanceToNow(new Date(createdMs), { addSuffix: true });
+                    const resolvedMs = issue.resolvedAt?.toMillis?.();
+                    const resolvedAge = resolvedMs ? formatDistanceToNow(new Date(resolvedMs), { addSuffix: true }) : null;
+
+                    return (
+                        <div
+                            key={issue.id}
+                            className="p-4 flex gap-4 items-center hover:bg-gray-50 transition-colors cursor-pointer"
+                            onClick={() => router.push(`/issue/${issue.id}`)}
+                        >
+                            <div className={`w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 shadow-sm border ${type === 'resolved' ? 'border-green-100 grayscale-[0.2]' : 'border-gray-100'} bg-gray-100`}>
+                                {(type === 'resolved' && issue.afterImageUrl) ? (
+                                    <img src={issue.afterImageUrl} alt="" className="w-full h-full object-cover" />
+                                ) : issue.imageUrl ? (
+                                    <img src={issue.imageUrl} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                        {type === 'resolved' ? <CheckCircle size={20} className="text-green-300" /> : <AlertTriangle size={20} className="text-gray-300" />}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-semibold text-sm text-gray-900 truncate">{issue.title}</p>
+                                        <p className="text-xs text-gray-500 flex items-center gap-1 mt-1 truncate">
+                                            <MapPin size={10} />{issue.cityName || 'Unknown'}
+                                            <span className="text-gray-300 mx-1">·</span>
+                                            {issue.category}
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                        <span className="flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
+                                            <Flame size={10} /> {issue.votes || 0}
+                                        </span>
+                                        <span className="flex items-center gap-1 text-[10px] font-semibold text-gray-500">
+                                            <Clock size={10} /> {type === 'resolved' && resolvedAge ? resolvedAge : age}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 pb-24 md:pb-4">
             {/* Hero */}
-            <div className="bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 text-white px-5 pt-8 pb-8">
+            <div className="bg-gradient-to-br from-[#0f172a] via-[#1e1b4b] to-[#0f172a] text-white px-5 pt-8 pb-12 shadow-lg">
                 <div className="max-w-3xl mx-auto">
                     <div className="flex items-center gap-2 mb-1">
-                        <ShieldCheck size={20} className="text-indigo-300" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-indigo-300">Public Accountability</span>
+                        <Map size={20} className="text-indigo-400" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">City Insights</span>
                     </div>
-                    <h1 className="text-2xl font-bold mt-2">Civic Scorecard</h1>
-                    <p className="text-indigo-300 text-sm mt-1">How well are your local departments performing?</p>
+                    <h1 className="text-2xl font-extrabold mt-2 tracking-tight">Civic Pulse in {userCity}</h1>
+                    <p className="text-slate-400 text-sm mt-1 font-medium">Tracking the leadership and progress within your community.</p>
                 </div>
             </div>
 
-            <div className="max-w-3xl mx-auto px-4 -mt-4 space-y-6">
-                {/* ── DEPARTMENT LEADERBOARD ─────────────────────── */}
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-                        <Trophy size={18} className="text-amber-500" />
-                        <h2 className="font-bold text-gray-900">Department Leaderboard</h2>
-                    </div>
+            <div className="max-w-3xl mx-auto px-4 -mt-8 space-y-6">
 
-                    {stats.length === 0 ? (
-                        <div className="p-8 text-center text-gray-400 text-sm">No resolved issues yet. The leaderboard will populate as officials resolve issues.</div>
-                    ) : (
-                        <div className="divide-y divide-gray-50">
-                            {/* Header row */}
-                            <div className="grid grid-cols-12 px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                                <span className="col-span-1">#</span>
-                                <span className="col-span-4">Department</span>
-                                <span className="col-span-2 text-center">Fixed</span>
-                                <span className="col-span-3 text-center">Avg Time</span>
-                                <span className="col-span-2 text-center">Trend</span>
-                            </div>
-                            {stats.map((dept, i) => {
-                                const momentum = dept.recentResolved - dept.priorResolved;
-                                return (
-                                    <div key={dept.department} className="grid grid-cols-12 items-center px-5 py-3 hover:bg-gray-50 transition-colors">
-                                        <span className="col-span-1 text-sm font-bold text-gray-500">{i + 1}</span>
-                                        <span className="col-span-4 text-sm font-semibold text-gray-900">{dept.department}</span>
-                                        <span className="col-span-2 text-center">
-                                            <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full">{dept.resolved}</span>
-                                        </span>
-                                        <span className="col-span-3 text-center text-xs text-gray-500">
-                                            {dept.avgResolutionHours < 24
-                                                ? `${dept.avgResolutionHours}h`
-                                                : `${Math.round(dept.avgResolutionHours / 24)}d`
-                                            }
-                                        </span>
-                                        <span className="col-span-2 flex justify-center">
-                                            {momentum > 0 ? (
-                                                <span className="flex items-center gap-0.5 text-green-600 text-xs font-bold"><TrendingUp size={14} />+{momentum}</span>
-                                            ) : momentum < 0 ? (
-                                                <span className="flex items-center gap-0.5 text-red-500 text-xs font-bold"><TrendingDown size={14} />{momentum}</span>
-                                            ) : (
-                                                <span className="flex items-center gap-0.5 text-gray-400 text-xs"><Minus size={14} />—</span>
-                                            )}
-                                        </span>
-                                    </div>
-                                );
-                            })}
+                {/* ── TOP CONTRIBUTORS ─────────────────────── */}
+                <div className="bg-white rounded-2xl border border-amber-100 shadow-xl overflow-hidden relative">
+                    <div className="px-5 py-4 border-b border-amber-50 flex items-center justify-between bg-gradient-to-r from-amber-50/50 to-white">
+                        <div className="flex items-center gap-2">
+                            <Trophy size={18} className="text-amber-500" />
+                            <h2 className="font-black text-gray-900 tracking-tight">Top Contributors</h2>
                         </div>
-                    )}
+                        <span className="text-[10px] font-black text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Leaders</span>
+                    </div>
+                    {renderLeaderboard()}
                 </div>
 
-                {/* ── WALL OF FAME ─────────────────────── */}
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-                        <span className="text-lg">🏆</span>
-                        <h2 className="font-bold text-gray-900">Wall of Fame</h2>
-                        <span className="text-xs text-gray-400 ml-1">Fastest Resolutions</span>
-                    </div>
-
-                    {fame.length === 0 ? (
-                        <div className="p-8 text-center text-gray-400 text-sm">No resolved issues yet.</div>
-                    ) : (
-                        <div className="divide-y divide-gray-50">
-                            {fame.map(issue => {
-                                const createdMs = issue.createdAt?.toMillis?.() || 0;
-                                const resolvedMs = issue.resolvedAt?.toMillis?.() || 0;
-                                const diffHours = Math.round((resolvedMs - createdMs) / (1000 * 60 * 60));
-                                const timeStr = diffHours < 24 ? `${diffHours}h` : `${Math.round(diffHours / 24)}d`;
-
-                                return (
-                                    <div key={issue.id} className="p-4 flex gap-3 items-start hover:bg-gray-50 transition-colors">
-                                        {/* Before/After mini */}
-                                        <div className="flex gap-1 flex-shrink-0">
-                                            <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-100">
-                                                {issue.imageUrl && <img src={issue.imageUrl} alt="" className="w-full h-full object-cover" />}
-                                            </div>
-                                            {issue.afterImageUrl && (
-                                                <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-100 border-2 border-green-300">
-                                                    <img src={issue.afterImageUrl} alt="" className="w-full h-full object-cover" />
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-semibold text-sm text-gray-900 truncate">{issue.title}</p>
-                                            <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                                                <MapPin size={10} />{issue.cityName || 'Unknown'}
-                                                <span className="text-gray-300 mx-0.5">·</span>
-                                                {issue.resolvedByDepartment || issue.category}
-                                            </p>
-                                            <div className="flex items-center gap-2 mt-1.5">
-                                                <span className="flex items-center gap-1 text-[11px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                                                    <CheckCircle size={10} /> Resolved in {timeStr}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                {/* ── TOP IN PROGRESS ─────────────────────── */}
+                <div className="bg-white rounded-2xl border border-blue-100 shadow-md overflow-hidden relative">
+                    <div className="px-5 py-4 border-b border-blue-50 flex items-center justify-between bg-gradient-to-r from-blue-50/50 to-white">
+                        <div className="flex items-center gap-2">
+                            <Clock size={18} className="text-blue-600" />
+                            <h2 className="font-bold text-gray-900 tracking-tight">Active Issues</h2>
                         </div>
-                    )}
+                        <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">Top 5</span>
+                    </div>
+                    {renderIssueList(inProgressIssues, `No issues are currently marked as Active in ${userCity}.`, 'in_progress')}
                 </div>
 
-                {/* ── WALL OF SHAME ─────────────────────── */}
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-                        <span className="text-lg">🚨</span>
-                        <h2 className="font-bold text-gray-900">Wall of Shame</h2>
-                        <span className="text-xs text-gray-400 ml-1">Most Hyped, Unresolved</span>
-                    </div>
-
-                    {shame.length === 0 ? (
-                        <div className="p-8 text-center text-gray-400 text-sm">All caught up! No heavily demanded unresolved issues.</div>
-                    ) : (
-                        <div className="divide-y divide-gray-50">
-                            {shame.map(issue => {
-                                const createdMs = issue.createdAt?.toMillis?.() || Date.now();
-                                const age = formatDistanceToNow(new Date(createdMs), { addSuffix: false });
-
-                                return (
-                                    <div key={issue.id} className="p-4 flex gap-3 items-start hover:bg-red-50/50 transition-colors">
-                                        <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                                            {issue.imageUrl ? (
-                                                <img src={issue.imageUrl} alt="" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center"><AlertTriangle size={20} className="text-gray-300" /></div>
-                                            )}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-semibold text-sm text-gray-900 truncate">{issue.title}</p>
-                                            <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                                                <MapPin size={10} />{issue.cityName || 'Unknown'}
-                                                <span className="text-gray-300 mx-0.5">·</span>
-                                                {issue.category}
-                                            </p>
-                                            <div className="flex items-center gap-2 mt-1.5">
-                                                <span className="flex items-center gap-1 text-[11px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
-                                                    <Flame size={10} /> {issue.votes || 0} hypes
-                                                </span>
-                                                <span className="flex items-center gap-1 text-[11px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
-                                                    <Clock size={10} /> {age} open
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                {/* ── TOP RESOLVED ─────────────────────── */}
+                <div className="bg-white rounded-2xl border border-emerald-100 shadow-md overflow-hidden relative">
+                    <div className="px-5 py-4 border-b border-emerald-50 flex items-center justify-between bg-gradient-to-r from-emerald-50/50 to-white">
+                        <div className="flex items-center gap-2">
+                            <CheckCircle size={18} className="text-emerald-600" />
+                            <h2 className="font-bold text-gray-900 tracking-tight">Recently Resolved</h2>
                         </div>
-                    )}
+                        <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">Top 5</span>
+                    </div>
+                    {renderIssueList(resolvedIssues, `No recently resolved issues in ${userCity}.`, 'resolved')}
+                </div>
+
+                <div className="text-center pb-8 pt-4">
+                    <p className="text-xs text-gray-400 flex items-center justify-center gap-1.5 font-semibold uppercase tracking-widest bg-gray-100/50 w-fit mx-auto px-4 py-1.5 rounded-full">
+                        <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                        </span>
+                        Live Pulse
+                    </p>
                 </div>
             </div>
         </div>

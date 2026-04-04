@@ -1,5 +1,9 @@
 import { db } from "./firebase";
-import { checkViralThreshold, notifyCitizenStatusUpdate } from "./notifications";
+import { checkViralThreshold, notifyCitizenStatusUpdate, notifyAuthorStatusUpdate } from "./notifications";
+import { awardXp } from "./gamification";
+import { getVoteWeight, onConsensusReached, onReportResolved, TRUST_DEFAULT } from "./trust";
+import { incrementMissionProgress } from "./missions";
+import { canSubmitReport, canVoteOnStatus, logVote } from "./antiManipulation";
 import {
     collection,
     addDoc,
@@ -26,7 +30,8 @@ export interface IssueData {
     description: string;
     location?: string; // Optional for now
     userId?: string; // Optional, placeholder
-    imageUrl?: string; // URL from Firebase Storage
+    imageUrl?: string; // Legacy URL from Firebase Storage
+    mediaUrls?: string[]; // Array of media URLs (images/videos)
 
     // Social V2 Fields
     userHandle?: string; // e.g. @civic_hero
@@ -44,14 +49,15 @@ export interface IssueData {
     };
 
     // Crowdsourced Status V3 Fields
-    statusData?: {
-        under_review: { yesWeight: number, noWeight: number, requiredThreshold: number },
-        in_progress: { yesWeight: number, noWeight: number, requiredThreshold: number },
-        resolved: { yesWeight: number, noWeight: number, requiredThreshold: number }
-    }
+    statusData?: Record<string, {
+        yesWeight: number;
+        noWeight: number;
+        score?: number;
+        requiredThreshold?: number; // legacy compatibility
+    }>;
 }
 
-export type IssueStatusState = 'Open' | 'Under Review' | 'In Progress' | 'Resolved';
+export type IssueStatusState = 'Open' | 'Reported' | 'Verification Needed' | 'Verified' | 'Active' | 'Action Seen' | 'Resolved' | 'Under Review' | 'In Progress';
 
 export interface Issue extends IssueData {
     id: string;
@@ -65,6 +71,7 @@ export interface Issue extends IssueData {
     resolvedStatement?: string;
     afterImageUrl?: string;
     resolvedAt?: any;
+    approvedAt?: any;
 }
 
 // ── Fetch single issue by ID ───────────────────────────────────────────────
@@ -236,6 +243,14 @@ export const getLeaderboardIssues = async (cityName: string | null) => {
 
 export const createIssue = async (data: IssueData) => {
     try {
+        // Anti-manipulation: check if new account has exceeded daily limit
+        if (data.userId) {
+            const reportCheck = await canSubmitReport(data.userId);
+            if (!reportCheck.allowed) {
+                throw new Error(reportCheck.reason || 'Report submission blocked.');
+            }
+        }
+
         // --- Smart Triage: Category to Department Mapping ---
         let assignedDepartment = 'General';
         const categoryMap: Record<string, string> = {
@@ -255,17 +270,27 @@ export const createIssue = async (data: IssueData) => {
 
         const docRef = await addDoc(collection(db, "issues"), {
             ...data,
-            status: "Open",
+            status: "Reported",
             assignedDepartment, // Auto-triaged department
             createdAt: serverTimestamp(),
             votes: 0,
             statusData: {
-                under_review: { yesWeight: 0, noWeight: 0, requiredThreshold: 3 },
-                in_progress: { yesWeight: 0, noWeight: 0, requiredThreshold: 3 },
-                resolved: { yesWeight: 0, noWeight: 0, requiredThreshold: 3 }
+                verification_needed: { yesWeight: 0, noWeight: 0, score: 0 },
+                verified: { yesWeight: 0, noWeight: 0, score: 0 },
+                active: { yesWeight: 0, noWeight: 0, score: 0 },
+                action_seen: { yesWeight: 0, noWeight: 0, score: 0 },
+                resolved: { yesWeight: 0, noWeight: 0, score: 0 }
             }
         });
         console.log("Issue written with ID: ", docRef.id);
+
+        // Award XP for submitting a report (fire-and-forget)
+        if (data.userId) {
+            awardXp(data.userId, 'REPORT_SUBMITTED', { category: data.category }).catch(() => { });
+            // Track mission progress for report action
+            incrementMissionProgress(data.userId, data.cityName || '', 'report', { issueCategory: data.category }).catch(() => { });
+        }
+
         return docRef.id;
     } catch (e) {
         console.error("Error adding document: ", e);
@@ -417,6 +442,7 @@ export interface CommentData {
     createdAt: any;
     likes: number;
     isOfficial?: boolean;
+    isAdmin?: boolean;
     department?: string;
 }
 
@@ -437,6 +463,7 @@ export const addComment = async (
     handle: string,
     avatarUrl?: string,
     isOfficial?: boolean,
+    isAdmin?: boolean,
     department?: string
 ) => {
     if (!issueId || !userId || !text.trim()) return null;
@@ -454,6 +481,9 @@ export const addComment = async (
         commentData.isOfficial = true;
         commentData.department = department || '';
     }
+    if (isAdmin) {
+        commentData.isAdmin = true;
+    }
 
     const docRef = await addDoc(collection(db, 'issues', issueId, 'comments'), commentData);
 
@@ -463,6 +493,11 @@ export const addComment = async (
             t.update(issueRef, { commentCount: increment(1) });
         });
     } catch (e) { console.error('Failed to increment commentCount', e); }
+
+    // Award XP for commenting (fire-and-forget)
+    awardXp(userId, 'COMMENT_ADDED').catch(() => { });
+    // Track mission progress for comment action
+    incrementMissionProgress(userId, '', 'comment').catch(() => { });
 
     return docRef.id;
 };
@@ -549,21 +584,59 @@ export const hasUserLikedComment = async (issueId: string, commentId: string, us
 // --- Crowdsourced Status Methods ---
 // The db string keys match the status options but formatted cleanly
 export const STATUS_DB_KEYS: Record<string, string> = {
+    'Verification Needed': 'verification_needed',
+    'Verified': 'verified',
+    'Active': 'active',
+    'Action Seen': 'action_seen',
+    'Resolved': 'resolved',
+    // Legacy aliases
     'Under Review': 'under_review',
     'In Progress': 'in_progress',
-    'Resolved': 'resolved',
 };
 
-// Maps the linear progression
-const STATUS_PROGRESSION = ['Open', 'Under Review', 'In Progress', 'Resolved'];
+// Maps the linear progression (new 6-stage lifecycle)
+const STATUS_PROGRESSION = ['Reported', 'Verification Needed', 'Verified', 'Active', 'Action Seen', 'Resolved'];
+
+/** Normalize legacy statuses to the new lifecycle */
+export function normalizeStatus(status: string): IssueStatusState {
+    switch (status) {
+        case 'Open':
+        case 'Reported':
+            return 'Reported';
+        case 'Under Review':
+        case 'Verification Needed':
+            return 'Verification Needed';
+        case 'Verified':
+            return 'Verified';
+        case 'In Progress':
+        case 'Active':
+            return 'Active';
+        case 'Action Seen':
+            return 'Action Seen';
+        case 'Resolved':
+            return 'Resolved';
+        default:
+            return 'Reported';
+    }
+}
+
+export type VoteOnStatusResult = 
+    | { success: true; consensusReached: boolean; newStatus: IssueStatusState; currentStats: { yesWeight: number, noWeight: number, score: number } }
+    | { success: false; error: string };
 
 export const voteOnStatus = async (
     issueId: string,
     userId: string,
     targetStatus: IssueStatusState,
     voteType: 'yes' | 'no'
-) => {
+): Promise<VoteOnStatusResult> => {
     if (!issueId || !userId || !targetStatus || targetStatus === 'Open') return { success: false, error: 'Invalid parameters' };
+
+    // Anti-manipulation: check vote rate limit
+    const voteCheck = await canVoteOnStatus(userId);
+    if (!voteCheck.allowed) {
+        return { success: false, error: voteCheck.reason || 'Vote rate limit exceeded.' };
+    }
 
     const issueRef = doc(db, 'issues', issueId);
     // User vote document path
@@ -575,57 +648,73 @@ export const voteOnStatus = async (
             if (!issueDoc.exists()) throw new Error("Issue not found");
 
             const voteDoc = await t.get(voteRef);
-            if (voteDoc.exists()) throw new Error("User has already voted on this specific status for this issue");
+            let previousVoteType: 'yes' | 'no' | null = null;
+            let previousVoteWeight = 0;
+            
+            if (voteDoc.exists()) {
+                const prevData = voteDoc.data();
+                if (prevData.vote === voteType) {
+                    throw new Error("User has already voted this exact option");
+                }
+                previousVoteType = prevData.vote;
+                previousVoteWeight = prevData.weightApplied || 0;
+            }
 
             const issueData = issueDoc.data();
             const currentStatus = issueData.status;
 
-            // Only allow voting on the *next* logical status in the timeline, or the current one to confirm it
-            // For simplicity in this demo, we'll just allow voting on any future state and check consensus
-
-            // Get user's trust score from users collection (mocked as 1.0 for now if missing)
+            // Get user's trust score and compute vote weight from tier system
             const userRef = doc(db, 'users', userId);
             const userDoc = await t.get(userRef);
-            const userWeight = userDoc.exists() ? (userDoc.data().trustScore || 1.0) : 1.0;
+            const userTrustScore = userDoc.exists() ? (userDoc.data().trustScore ?? TRUST_DEFAULT) : TRUST_DEFAULT;
+            
+            // Confidence scaling incorporates total votes
+            const activeVotes = issueData.votes || 0;
+            const userWeight = getVoteWeight(userTrustScore, activeVotes);
 
             const dbKey = STATUS_DB_KEYS[targetStatus];
             if (!dbKey) throw new Error("Invalid status target");
 
             // Initialize statusData if old issue
-            const statusData = issueData.statusData || {
-                under_review: { yesWeight: 0, noWeight: 0, requiredThreshold: 3 },
-                in_progress: { yesWeight: 0, noWeight: 0, requiredThreshold: 3 },
-                resolved: { yesWeight: 0, noWeight: 0, requiredThreshold: 3 }
-            };
+            const statusData = issueData.statusData || {};
+            const targetData = statusData[dbKey] || { yesWeight: 0, noWeight: 0, score: 0 };
 
-            const targetData = statusData[dbKey] || { yesWeight: 0, noWeight: 0, requiredThreshold: 3 };
+            // Revert previous vote weight if user flipped their vote
+            if (previousVoteType === 'yes') {
+                targetData.yesWeight = Math.max(0, targetData.yesWeight - previousVoteWeight);
+            } else if (previousVoteType === 'no') {
+                targetData.noWeight = Math.max(0, targetData.noWeight - previousVoteWeight);
+            }
 
-            // Apply vote weight
+            // Apply new vote weight
             if (voteType === 'yes') {
                 targetData.yesWeight += userWeight;
             } else {
                 targetData.noWeight += userWeight;
             }
 
-            // Calculate Dynamic Threshold (Math.max(3, 10% of total voters))
-            const activeVotes = issueData.votes || 0;
-            const dynamicThreshold = Math.max(3, Math.ceil(activeVotes * 0.1));
-            targetData.requiredThreshold = dynamicThreshold;
+            // Calculate Continuous Consensus Score
+            const netScore = targetData.yesWeight - targetData.noWeight;
+            targetData.score = netScore;
 
-            // Check if Consensus is Reached
+            // Check if Consensus is Reached (Stability Buffer)
             let newStatus = currentStatus;
             let consensusReached = false;
 
-            const netScore = targetData.yesWeight - targetData.noWeight;
-            if (netScore >= dynamicThreshold) {
-                // Determine if this new status is strictly > current in timeline
-                const currentIndex = STATUS_PROGRESSION.indexOf(currentStatus);
-                const targetIndex = STATUS_PROGRESSION.indexOf(targetStatus);
+            const currentIndex = STATUS_PROGRESSION.indexOf(currentStatus);
+            const targetIndex = STATUS_PROGRESSION.indexOf(targetStatus);
 
-                if (targetIndex > currentIndex) {
-                    newStatus = targetStatus;
-                    consensusReached = true;
-                }
+            // Votes are cast on the CURRENT stage (e.g. "Verification Needed").
+            // Forward consensus → advance to the NEXT stage in progression.
+            // Backward consensus → revert to the prior stage.
+            if (netScore > 2.0 && targetIndex === currentIndex && currentIndex < STATUS_PROGRESSION.length - 1) {
+                // Forward Transition: community confirmed the current stage → move to next
+                newStatus = STATUS_PROGRESSION[currentIndex + 1] as IssueStatusState;
+                consensusReached = true;
+            } else if (netScore < -2.0 && currentIndex > 0) {
+                // Backward Transition: community rejects current stage → revert one step
+                newStatus = STATUS_PROGRESSION[currentIndex - 1] as IssueStatusState;
+                consensusReached = true;
             }
 
             // Save the Vote Record
@@ -644,17 +733,34 @@ export const voteOnStatus = async (
             });
 
             return {
-                success: true,
+                success: true as const,
                 consensusReached,
                 newStatus,
-                currentStats: targetData
+                currentStats: targetData,
+                _issueTitle: issueData.title,
+                _authorUid: issueData.userId
             };
         });
 
-        return result;
+        if (result.success && result.consensusReached && result.newStatus && result._authorUid) {
+            // Fire-and-forget: Notify author of status change
+            notifyAuthorStatusUpdate(issueId, result._issueTitle || 'Untitled Issue', result._authorUid, result.newStatus).catch(() => { });
+            // Fire-and-forget: Update trust scores for voters based on consensus outcome
+            onConsensusReached(issueId, result.newStatus).catch(() => { });
+        }
+
+        // Award XP to the voter for participating in verification (fire-and-forget)
+        awardXp(userId, 'VERIFICATION_VOTE').catch(() => { });
+        // Track mission progress for verify action
+        incrementMissionProgress(userId, '', 'verify').catch(() => { });
+        // Log vote for rate-limiting
+        logVote(userId, issueId).catch(() => { });
+
+        const { _issueTitle, _authorUid, ...cleanResult } = result;
+        return cleanResult as VoteOnStatusResult;
     } catch (e: any) {
         console.error("Status vote transaction failed: ", e);
-        return { success: false, error: e.message || String(e) };
+        return { success: false as const, error: e.message || String(e) };
     }
 };
 
@@ -883,8 +989,20 @@ export const officialResolveIssue = async (
         });
         // Fire-and-forget: notify all citizens who hyped this issue
         const issueSnap = await getDoc(doc(db, 'issues', issueId));
-        const issueTitle = issueSnap.data()?.title || 'An issue';
+        const issueData = issueSnap.data();
+        const issueTitle = issueData?.title || 'An issue';
+        const authorUid = issueData?.userId;
+
         notifyCitizenStatusUpdate(issueId, issueTitle, 'Resolved').catch(() => { });
+
+        if (authorUid) {
+            notifyAuthorStatusUpdate(issueId, issueTitle, authorUid, 'Resolved').catch(() => { });
+            // Reward the reporter: trust boost + XP for getting their issue resolved
+            onReportResolved(authorUid).catch(() => { });
+            awardXp(authorUid, 'REPORT_RESOLVED').catch(() => { });
+        }
+        // Update trust for voters who participated in verification
+        onConsensusReached(issueId, 'Resolved').catch(() => { });
     } catch (error) {
         console.error("Error resolving issue:", error);
         throw error;
@@ -1000,3 +1118,99 @@ export const getMostHypedUnresolved = async (limitN: number = 5): Promise<Issue[
     }
 };
 
+/**
+ * Top N unresolved issues for a specific city.
+ */
+export const getTopIssuesByCity = async (cityName: string, limitN: number = 5): Promise<Issue[]> => {
+    try {
+        const q = query(
+            collection(db, 'issues'),
+            where('cityName', '==', cityName),
+            limit(100)
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs
+            .map(d => ({ id: d.id, ...d.data() } as Issue))
+            .filter(i => i.status !== 'Resolved')
+            .sort((a, b) => (b.votes || 0) - (a.votes || 0))
+            .slice(0, limitN);
+    } catch (error) {
+        console.error("Error getting top issues by city:", error);
+        return [];
+    }
+};
+
+/**
+ * Top N In Progress issues for a specific city.
+ */
+export const getTopInProgressByCity = async (cityName: string, limitN: number = 5): Promise<Issue[]> => {
+    try {
+        const q = query(
+            collection(db, 'issues'),
+            where('cityName', '==', cityName),
+            where('status', '==', 'Active'),
+            limit(100)
+        );
+        const snapshot = await getDocs(q);
+        const issues = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+        // Sort newest first
+        return issues.sort((a, b) => {
+            const tA = a.createdAt?.toMillis?.() || 0;
+            const tB = b.createdAt?.toMillis?.() || 0;
+            return tB - tA;
+        }).slice(0, limitN);
+    } catch (error) {
+        console.error("Error getting in progress issues by city:", error);
+        return [];
+    }
+};
+
+/**
+ * Top N Resolved issues for a specific city.
+ */
+export const getTopResolvedByCity = async (cityName: string, limitN: number = 5): Promise<Issue[]> => {
+    try {
+        const q = query(
+            collection(db, 'issues'),
+            where('cityName', '==', cityName),
+            where('status', '==', 'Resolved'),
+            limit(100)
+        );
+        const snapshot = await getDocs(q);
+        const issues = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+        // Sort newest resolved first
+        return issues.sort((a, b) => {
+            const tA = a.resolvedAt?.toMillis?.() || (a.createdAt?.toMillis?.() || 0);
+            const tB = b.resolvedAt?.toMillis?.() || (b.createdAt?.toMillis?.() || 0);
+            return tB - tA;
+        }).slice(0, limitN);
+    } catch (error) {
+        console.error("Error getting resolved issues by city:", error);
+        return [];
+    }
+};
+
+/**
+ * Top N Pending Posts for a specific city.
+ */
+export const getTopPendingByCity = async (cityName: string, limitN: number = 5): Promise<Issue[]> => {
+    try {
+        const q = query(
+            collection(db, 'issues'),
+            where('cityName', '==', cityName),
+            where('status', '==', 'Under Review'),
+            limit(100)
+        );
+        const snapshot = await getDocs(q);
+        const issues = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+        // FIFO: Oldest first for pending approval
+        return issues.sort((a, b) => {
+            const tA = a.createdAt?.toMillis?.() || 0;
+            const tB = b.createdAt?.toMillis?.() || 0;
+            return tA - tB;
+        }).slice(0, limitN);
+    } catch (error) {
+        console.error("Error getting pending issues by city:", error);
+        return [];
+    }
+};

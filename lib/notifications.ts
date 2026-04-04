@@ -16,7 +16,11 @@ export type NotificationType =
     | 'urgent_sla'
     | 'status_update'
     | 'hype'
-    | 'comment';
+    | 'comment'
+    | 'issue_approved'
+    | 'issue_rejected'
+    | 'author_milestone'
+    | 'author_status';
 
 export interface NotificationData {
     id: string;
@@ -54,12 +58,17 @@ export const getNotifications = async (uid: string, limitN: number = 30): Promis
     try {
         const q = query(
             collection(db, 'notifications'),
-            where('targetUid', '==', uid),
-            orderBy('createdAt', 'desc'),
-            limit(limitN)
+            where('targetUid', '==', uid)
         );
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as NotificationData));
+        const all = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as NotificationData));
+        return all
+            .sort((a, b) => {
+                const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+                const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+                return bTime - aTime;
+            })
+            .slice(0, limitN);
     } catch (e) {
         console.error('Error fetching notifications:', e);
         return [];
@@ -146,12 +155,18 @@ export const checkViralThreshold = async (issueId: string): Promise<void> => {
 
         const data = issueDoc.data();
         const votes = data.votes || 0;
-
-        if (votes !== VIRAL_THRESHOLD) return;
-
         const category = data.category || '';
         const cityName = data.cityName || '';
         const title = data.title || 'Untitled Issue';
+        const authorUid = data.userId;
+
+        // Check for Author Hype Milestones (e.g. 50, 100, 150)
+        if (votes > 0 && votes % 50 === 0 && authorUid) {
+            await notifyAuthorHypeMilestone(issueId, title, authorUid, votes);
+        }
+
+        // Official Viral Notification is ONLY sent exactly at VIRAL_THRESHOLD (50)
+        if (votes !== VIRAL_THRESHOLD) return;
 
         const officialUids = await findOfficials(category, cityName);
         if (officialUids.length === 0) return;
@@ -182,7 +197,7 @@ export const checkViralThreshold = async (issueId: string): Promise<void> => {
 // ═══════════════════════════════════════════════════════════════════════
 
 /**
- * Check if an issue has breached SLA: >50 hypes AND status is Open/Under Review AND >72h old.
+ * Check if an issue has breached SLA: >50 hypes AND status is Reported/Verification Needed AND >72h old.
  */
 export const checkSLABreach = async (issueId: string): Promise<boolean> => {
     try {
@@ -191,12 +206,12 @@ export const checkSLABreach = async (issueId: string): Promise<boolean> => {
 
         const data = issueDoc.data();
         const votes = data.votes || 0;
-        const status = data.status || 'Open';
+        const status = data.status || 'Reported';
         const createdMs = data.createdAt?.toMillis?.() || Date.now();
         const hoursOld = (Date.now() - createdMs) / (1000 * 60 * 60);
 
         const breached = votes >= VIRAL_THRESHOLD && hoursOld >= SLA_HOURS &&
-            (status === 'Open' || status === 'Under Review');
+            (status === 'Reported' || status === 'Verification Needed' || status === 'Open' || status === 'Under Review');
 
         if (breached) {
             // Check we haven't already sent an SLA notification for this issue
@@ -281,6 +296,97 @@ export const notifyCitizenStatusUpdate = async (
         }
     } catch (e) {
         console.error('Error notifying citizens:', e);
+    }
+};
+
+export const notifyCitizenIssueApproved = async (
+    issueId: string,
+    issueTitle: string,
+    targetUid: string
+): Promise<void> => {
+    try {
+        await addDoc(collection(db, 'notifications'), {
+            targetUid,
+            type: 'issue_approved',
+            isUrgent: false,
+            title: 'Report Approved',
+            body: `Your report "${issueTitle}" has been approved and is now live.`,
+            issueId,
+            issueTitle,
+            read: false,
+            createdAt: serverTimestamp()
+        });
+    } catch (e) {
+        console.error('Error notifying citizen of approval:', e);
+    }
+};
+
+export const notifyCitizenIssueRejected = async (
+    issueId: string,
+    issueTitle: string,
+    targetUid: string,
+    remarks: string
+): Promise<void> => {
+    try {
+        await addDoc(collection(db, 'notifications'), {
+            targetUid,
+            type: 'issue_rejected',
+            isUrgent: true,
+            title: 'Report Rejected',
+            body: `Your report "${issueTitle}" was rejected. Remarks: ${remarks}`,
+            issueId,
+            issueTitle,
+            read: false,
+            createdAt: serverTimestamp()
+        });
+    } catch (e) {
+        console.error('Error notifying citizen of rejection:', e);
+    }
+};
+
+export const notifyAuthorHypeMilestone = async (
+    issueId: string,
+    issueTitle: string,
+    authorUid: string,
+    hypeCount: number
+): Promise<void> => {
+    try {
+        await addDoc(collection(db, 'notifications'), {
+            targetUid: authorUid,
+            type: 'author_milestone',
+            isUrgent: false,
+            title: 'Hype Milestone Reached! 🎉',
+            body: `Your report "${issueTitle}" just reached ${hypeCount} hypes! Keep up the great work.`,
+            issueId,
+            issueTitle,
+            read: false,
+            createdAt: serverTimestamp()
+        });
+    } catch (e) {
+        console.error('Error notifying author of milestone:', e);
+    }
+};
+
+export const notifyAuthorStatusUpdate = async (
+    issueId: string,
+    issueTitle: string,
+    authorUid: string,
+    newStatus: string
+): Promise<void> => {
+    try {
+        await addDoc(collection(db, 'notifications'), {
+            targetUid: authorUid,
+            type: 'author_status',
+            isUrgent: false,
+            title: 'Report Status Updated',
+            body: `The status of your report "${issueTitle}" has been updated to ${newStatus}.`,
+            issueId,
+            issueTitle,
+            read: false,
+            createdAt: serverTimestamp()
+        });
+    } catch (e) {
+        console.error('Error notifying author of status update:', e);
     }
 };
 

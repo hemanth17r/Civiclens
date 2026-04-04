@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, TrendingUp, Loader2, User, MapPin } from 'lucide-react';
+import { Search, TrendingUp, Loader2, User, MapPin, Users, LayoutGrid, ChevronLeft } from 'lucide-react';
 import { clsx } from 'clsx';
 import { getTrendingIssues, searchUsers, searchIssues, Issue, UserSearchResult } from '@/lib/issues';
 import IssueCard from '@/components/IssueCard';
 import { useRouter } from 'next/navigation';
+import { INDIAN_CITIES } from '@/data/cities';
 
 // Match categories with ReportIssueDialog
 const categories = ["All", "Road", "Waste", "Water", "Safety", "Infrastructure", "Environment", "Other"];
@@ -24,8 +25,11 @@ export default function ExplorePage() {
     const [searchResultsUsers, setSearchResultsUsers] = useState<UserSearchResult[]>([]);
     const [searchResultsIssues, setSearchResultsIssues] = useState<Issue[]>([]);
     const [showSearchResults, setShowSearchResults] = useState(false);
+    const [isResultsView, setIsResultsView] = useState(false);
+    const [activeTab, setActiveTab] = useState<'accounts' | 'posts' | 'places'>('posts');
+    const [matchedCity, setMatchedCity] = useState<string | null>(null);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const searchContainerRef = useRef<HTMLDivElement>(null);
+    const searchContainerRef = useRef<any>(null);
 
     // Fetch trending issues
     const fetchTrending = useCallback(async (cat: string) => {
@@ -44,15 +48,14 @@ export default function ExplorePage() {
         fetchTrending(selectedCategory);
     }, [selectedCategory, fetchTrending]);
 
-    // Debounced search
+    // Debounced search for iterative dropdown (Accounts only)
     const handleSearchInput = (value: string) => {
         setSearchQuery(value);
         if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
-        if (value.length < 2) {
+        if (value.length < 1) {
             setShowSearchResults(false);
             setSearchResultsUsers([]);
-            setSearchResultsIssues([]);
             return;
         }
 
@@ -60,18 +63,49 @@ export default function ExplorePage() {
             setIsSearching(true);
             setShowSearchResults(true);
             try {
-                const [users, issues] = await Promise.all([
-                    searchUsers(value),
-                    searchIssues(value)
-                ]);
+                const users = await searchUsers(value);
                 setSearchResultsUsers(users);
-                setSearchResultsIssues(issues);
             } catch (e) {
-                console.error('Search error:', e);
+                console.error('Iterative search error:', e);
             } finally {
                 setIsSearching(false);
             }
-        }, 400);
+        }, 300);
+    };
+
+    const handleSearchSubmit = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (searchQuery.length < 2) return;
+
+        setIsSearching(true);
+        setShowSearchResults(false);
+        setIsResultsView(true);
+
+        try {
+            // Check for city match
+            const cityMatch = INDIAN_CITIES.find(c => 
+                c.name.toLowerCase() === searchQuery.trim().toLowerCase()
+            );
+            
+            if (cityMatch) {
+                setMatchedCity(cityMatch.name);
+                setActiveTab('places');
+            } else {
+                setMatchedCity(null);
+                setActiveTab('posts');
+            }
+
+            const [users, issues] = await Promise.all([
+                searchUsers(searchQuery),
+                searchIssues(searchQuery)
+            ]);
+            setSearchResultsUsers(users);
+            setSearchResultsIssues(issues);
+        } catch (e) {
+            console.error('Full search error:', e);
+        } finally {
+            setIsSearching(false);
+        }
     };
 
     // Close search results on click outside
@@ -89,14 +123,14 @@ export default function ExplorePage() {
         <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
             {/* Sticky Header */}
             <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md pt-4 pb-2 px-4 shadow-sm md:hidden">
-                <div className="relative" ref={searchContainerRef}>
+                <form onSubmit={handleSearchSubmit} className="relative" ref={searchContainerRef}>
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     <input
                         type="text"
                         placeholder="Search @handles, issues, places..."
                         value={searchQuery}
                         onChange={(e) => handleSearchInput(e.target.value)}
-                        onFocus={() => { if (searchQuery.length >= 2) setShowSearchResults(true); }}
+                        onFocus={() => { if (searchQuery.length >= 1) setShowSearchResults(true); }}
                         className="w-full bg-gray-100 rounded-full py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
                     />
 
@@ -118,7 +152,7 @@ export default function ExplorePage() {
                                                     key={u.uid}
                                                     onClick={() => {
                                                         setShowSearchResults(false);
-                                                        // Could navigate to user profile in the future
+                                                        router.push(`/profile/${u.uid}`);
                                                     }}
                                                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
                                                 >
@@ -140,41 +174,6 @@ export default function ExplorePage() {
                                         </div>
                                     )}
 
-                                    {/* Issue results */}
-                                    {searchResultsIssues.length > 0 && (
-                                        <div className="p-3 border-t border-gray-100">
-                                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-2 mb-2">Issues</p>
-                                            {searchResultsIssues.slice(0, 5).map(issue => (
-                                                <button
-                                                    key={issue.id}
-                                                    onClick={() => {
-                                                        setShowSearchResults(false);
-                                                        router.push(`/issue/${issue.id}`);
-                                                    }}
-                                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
-                                                >
-                                                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
-                                                        {issue.imageUrl ? (
-                                                            <img src={issue.imageUrl} alt="" className="w-full h-full object-cover" />
-                                                        ) : (
-                                                            <div className="w-full h-full flex items-center justify-center">
-                                                                <MapPin size={16} className="text-gray-300" />
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <div className="text-left flex-1 min-w-0">
-                                                        <p className="text-sm font-semibold text-gray-900 truncate">{issue.title}</p>
-                                                        <p className="text-xs text-gray-500 flex items-center gap-1">
-                                                            <MapPin size={10} />
-                                                            {issue.cityName || issue.location || 'Unknown'}
-                                                            <span className="text-gray-300 mx-1">•</span>
-                                                            {issue.votes || 0} hypes
-                                                        </p>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
 
                                     {/* No results */}
                                     {searchResultsUsers.length === 0 && searchResultsIssues.length === 0 && !isSearching && (
@@ -187,78 +186,218 @@ export default function ExplorePage() {
                             )}
                         </div>
                     )}
-                </div>
+                </form>
             </div>
 
             {/* Desktop Header */}
             <div className="hidden md:block p-6 bg-white border-b border-gray-100">
-                <h1 className="text-2xl font-bold text-gray-900 mb-4">Explore Community Issues</h1>
-                <div className="relative max-w-xl" ref={searchContainerRef}>
+                <div className="flex items-center justify-between mb-4">
+                    <h1 className="text-2xl font-bold text-gray-900">
+                        {isResultsView ? 'Search Results' : 'Explore Community Issues'}
+                    </h1>
+                    {isResultsView && (
+                        <button 
+                            onClick={() => setIsResultsView(false)}
+                            className="flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700"
+                        >
+                            <ChevronLeft size={16} />
+                            Back to Trending
+                        </button>
+                    )}
+                </div>
+                <form onSubmit={handleSearchSubmit} className="relative max-w-xl" ref={searchContainerRef}>
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                     <input
                         type="text"
                         placeholder="Search @handles, issues, places..."
                         value={searchQuery}
                         onChange={(e) => handleSearchInput(e.target.value)}
-                        onFocus={() => { if (searchQuery.length >= 2) setShowSearchResults(true); }}
+                        onFocus={() => { if (searchQuery.length >= 1) setShowSearchResults(true); }}
                         className="w-full bg-gray-50 border border-gray-200 rounded-full py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
                     />
-                </div>
+                </form>
             </div>
 
-            {/* Category Pills */}
-            <div className="bg-white border-b border-gray-100 py-3 overflow-x-auto no-scrollbar">
-                <div className="flex px-4 gap-2 min-w-max">
-                    {categories.map((cat) => (
-                        <button
-                            key={cat}
-                            onClick={() => setSelectedCategory(cat)}
+            {/* Main Content Area */}
+            {!isResultsView ? (
+                <>
+                    {/* Category Pills */}
+                    <div className="bg-white border-b border-gray-100 py-3 overflow-x-auto no-scrollbar">
+                        <div className="flex px-4 gap-2 min-w-max">
+                            {categories.map((cat) => (
+                                <button
+                                    key={cat}
+                                    onClick={() => setSelectedCategory(cat)}
+                                    className={clsx(
+                                        "px-4 py-1.5 rounded-full text-sm font-medium transition-colors border",
+                                        selectedCategory === cat
+                                            ? "bg-gray-900 text-white border-gray-900"
+                                            : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                                    )}
+                                >
+                                    {cat}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Trending Header */}
+                    <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+                        <TrendingUp size={18} className="text-blue-600" />
+                        <h2 className="text-sm font-bold text-gray-900">Trending</h2>
+                        <span className="text-xs text-gray-400 font-medium">• Past 7 days</span>
+                    </div>
+
+                    {/* Trending Content */}
+                    <div className="max-w-2xl mx-auto px-4 pb-4">
+                        {loadingTrending ? (
+                            <div className="flex justify-center py-16">
+                                <Loader2 className="animate-spin text-gray-400" size={28} />
+                            </div>
+                        ) : trendingIssues.length > 0 ? (
+                            <div className="space-y-5">
+                                {trendingIssues.map((issue) => (
+                                    <IssueCard key={issue.id} issue={issue} />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-20 text-center">
+                                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                                    <TrendingUp size={32} className="text-gray-400" />
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-900 mb-1">No trending issues</h3>
+                                <p className="text-gray-500 text-sm max-w-xs mx-auto">
+                                    {selectedCategory !== 'All'
+                                        ? `No trending issues in "${selectedCategory}" right now. Try a different category.`
+                                        : 'No issues trending right now. Be the first to report one!'}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </>
+            ) : (
+                <>
+                    {/* Search Tabs */}
+                    <div className="bg-white border-b border-gray-100 flex sticky top-0 z-10 md:static">
+                        <button 
+                            onClick={() => setActiveTab('accounts')}
                             className={clsx(
-                                "px-4 py-1.5 rounded-full text-sm font-medium transition-colors border",
-                                selectedCategory === cat
-                                    ? "bg-gray-900 text-white border-gray-900"
-                                    : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                                "flex-1 py-3 flex flex-col items-center gap-1 border-b-2 transition-all",
+                                activeTab === 'accounts' ? "border-gray-900 text-gray-900" : "border-transparent text-gray-400"
                             )}
                         >
-                            {cat}
+                            <Users size={20} />
+                            <span className="text-[10px] font-bold uppercase tracking-tight">Accounts</span>
                         </button>
-                    ))}
-                </div>
-            </div>
+                        <button 
+                            onClick={() => setActiveTab('posts')}
+                            className={clsx(
+                                "flex-1 py-3 flex flex-col items-center gap-1 border-b-2 transition-all",
+                                activeTab === 'posts' ? "border-gray-900 text-gray-900" : "border-transparent text-gray-400"
+                            )}
+                        >
+                            <LayoutGrid size={20} />
+                            <span className="text-[10px] font-bold uppercase tracking-tight">Posts</span>
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('places')}
+                            className={clsx(
+                                "flex-1 py-3 flex flex-col items-center gap-1 border-b-2 transition-all",
+                                activeTab === 'places' ? "border-gray-900 text-gray-900" : "border-transparent text-gray-400"
+                            )}
+                        >
+                            <MapPin size={20} />
+                            <span className="text-[10px] font-bold uppercase tracking-tight">
+                                {matchedCity ? matchedCity : 'Places'}
+                            </span>
+                        </button>
+                    </div>
 
-            {/* Trending Header */}
-            <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-                <TrendingUp size={18} className="text-blue-600" />
-                <h2 className="text-sm font-bold text-gray-900">Trending</h2>
-                <span className="text-xs text-gray-400 font-medium">• Past 7 days</span>
-            </div>
+                    {/* Results View */}
+                    <div className="max-w-2xl mx-auto px-4 py-6">
+                        {isSearching ? (
+                            <div className="flex justify-center py-20">
+                                <Loader2 className="animate-spin text-blue-600" size={32} />
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                {activeTab === 'accounts' && (
+                                    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                                        {searchResultsUsers.length > 0 ? (
+                                            searchResultsUsers.map(u => (
+                                                <button
+                                                    key={u.uid}
+                                                    onClick={() => router.push(`/profile/${u.uid}`)}
+                                                    className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0"
+                                                >
+                                                    <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-400 to-purple-400 p-[2px]">
+                                                        <div className="w-full h-full rounded-full bg-white overflow-hidden flex items-center justify-center">
+                                                            {u.photoURL ? (
+                                                                <img src={u.photoURL} alt="" className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <User size={20} className="text-gray-300" />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-left flex-1">
+                                                        <p className="font-bold text-gray-900">{u.handle}</p>
+                                                        <p className="text-sm text-gray-500">{u.displayName}</p>
+                                                    </div>
+                                                </button>
+                                            ))
+                                        ) : (
+                                            <div className="p-12 text-center text-gray-400">
+                                                <Users size={48} className="mx-auto mb-4 opacity-10" />
+                                                <p className="font-medium">No accounts found</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
-            {/* Trending Content */}
-            <div className="max-w-2xl mx-auto px-4 pb-4">
-                {loadingTrending ? (
-                    <div className="flex justify-center py-16">
-                        <Loader2 className="animate-spin text-gray-400" size={28} />
+                                {activeTab === 'posts' && (
+                                    <>
+                                        {searchResultsIssues.length > 0 ? (
+                                            searchResultsIssues.map(issue => (
+                                                <IssueCard key={issue.id} issue={issue} />
+                                            ))
+                                        ) : (
+                                            <div className="p-12 text-center text-gray-400 bg-white rounded-2xl border border-gray-100">
+                                                <LayoutGrid size={48} className="mx-auto mb-4 opacity-10" />
+                                                <p className="font-medium">No matches in reports</p>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+
+                                {activeTab === 'places' && (
+                                    <>
+                                        {searchResultsIssues.filter(i => 
+                                            matchedCity 
+                                                ? i.cityName?.toLowerCase() === matchedCity.toLowerCase()
+                                                : i.location?.toLowerCase().includes(searchQuery.toLowerCase()) || i.cityName?.toLowerCase().includes(searchQuery.toLowerCase())
+                                        ).length > 0 ? (
+                                            searchResultsIssues
+                                                .filter(i => 
+                                                    matchedCity 
+                                                        ? i.cityName?.toLowerCase() === matchedCity.toLowerCase()
+                                                        : i.location?.toLowerCase().includes(searchQuery.toLowerCase()) || i.cityName?.toLowerCase().includes(searchQuery.toLowerCase())
+                                                )
+                                                .map(issue => (
+                                                    <IssueCard key={issue.id} issue={issue} />
+                                                ))
+                                        ) : (
+                                            <div className="p-12 text-center text-gray-400 bg-white rounded-2xl border border-gray-100">
+                                                <MapPin size={48} className="mx-auto mb-4 opacity-10" />
+                                                <p className="font-medium">No reports found for this location</p>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
                     </div>
-                ) : trendingIssues.length > 0 ? (
-                    <div className="space-y-5">
-                        {trendingIssues.map((issue) => (
-                            <IssueCard key={issue.id} issue={issue} />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="flex flex-col items-center justify-center py-20 text-center">
-                        <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                            <TrendingUp size={32} className="text-gray-400" />
-                        </div>
-                        <h3 className="text-lg font-bold text-gray-900 mb-1">No trending issues</h3>
-                        <p className="text-gray-500 text-sm max-w-xs mx-auto">
-                            {selectedCategory !== 'All'
-                                ? `No trending issues in "${selectedCategory}" right now. Try a different category.`
-                                : 'No issues trending right now. Be the first to report one!'}
-                        </p>
-                    </div>
-                )}
-            </div>
+                </>
+            )}
         </div>
     );
 }

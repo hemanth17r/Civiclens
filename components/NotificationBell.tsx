@@ -66,8 +66,12 @@ export default function NotificationBell() {
     const getNotifIcon = (type: string, isUrgent: boolean) => {
         if (isUrgent) return <AlertTriangle size={16} className="text-red-600" />;
         switch (type) {
-            case 'status_update': return <ShieldCheck size={16} className="text-green-600" />;
-            case 'hype': return <Flame size={16} className="text-orange-500" />;
+            case 'status_update':
+            case 'author_status':
+            case 'issue_approved': return <ShieldCheck size={16} className="text-green-600" />;
+            case 'issue_rejected': return <X size={16} className="text-red-600" />;
+            case 'hype':
+            case 'author_milestone': return <Flame size={16} className="text-orange-500" />;
             case 'comment': return <MessageCircle size={16} className="text-blue-500" />;
             default: return <Bell size={16} className="text-gray-500" />;
         }
@@ -143,10 +147,10 @@ export default function NotificationBell() {
                                     onClick={() => handleNotifClick(notif)}
                                     className={`px-4 py-3 flex gap-3 cursor-pointer hover:bg-gray-50 transition-colors ${getNotifBg(notif)}`}
                                 >
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${notif.isUrgent ? 'bg-red-100' :
-                                            notif.type === 'status_update' ? 'bg-green-100' :
-                                                notif.type === 'hype' ? 'bg-orange-100' :
-                                                    'bg-blue-100'
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${notif.isUrgent || notif.type === 'issue_rejected' ? 'bg-red-100' :
+                                        (notif.type === 'status_update' || notif.type === 'author_status' || notif.type === 'issue_approved') ? 'bg-green-100' :
+                                            (notif.type === 'hype' || notif.type === 'author_milestone') ? 'bg-orange-100' :
+                                                'bg-blue-100'
                                         }`}>
                                         {getNotifIcon(notif.type, notif.isUrgent)}
                                     </div>

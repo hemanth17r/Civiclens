@@ -45,9 +45,17 @@ build.txt
 build_log.txt
 tsc-out.txt
 tsc_output.txt
+tsc-errors.txt
 
 # local test/dev scripts
 test_endpoint.js
+
+# Firebase debug logs (never commit)
+firebase-debug.log
+firebase-debug.*.log
+
+# Locally cached user-uploaded media (served from Supabase in production)
+/public/uploads/
 
 # Antigravity / AI agent workspace
 .gemini/

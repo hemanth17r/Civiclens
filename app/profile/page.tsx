@@ -4,24 +4,31 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import {
     User, FileText, Heart, Menu, X, LogOut,
-    Camera, Check, Loader2, ChevronRight, UserCircle, Info, MapPin, Bookmark, Flame, MessageCircle
+    Camera, Check, Loader2, ChevronRight, UserCircle, Info, MapPin, Bookmark, Flame, MessageCircle, MessageSquare, Shield, Zap, Award
 } from 'lucide-react';
-import { collection, query, where, getDocs, orderBy, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
-import { db, storage } from '@/lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db } from '@/lib/firebase';
+import { supabase } from '@/lib/supabase';
 import { Issue, getUserHypedIssues, getUserCommentedIssues, getUserSavedIssues } from '@/lib/issues';
+import { getFollowStats } from '@/lib/followers';
 import IssueCard from '@/components/IssueCard';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
 import { INDIAN_CITIES } from '@/data/cities';
+import ConnectionsModal from '@/components/ConnectionsModal';
+import { getUserGamificationStats, getLevelFromXp, getXpProgress, type Badge as GBadge } from '@/lib/gamification';
+import { getUserTrustStats, getVoteWeightTier } from '@/lib/trust';
+import { getUserCityRank } from '@/lib/users';
+import { LevelBadge, XpProgressBar, TrustBadge, BadgeGrid, StreakDisplay } from '@/components/GamificationUI';
+import VerifiedBadge from '@/components/VerifiedBadge';
 
-type DrawerSection = null | 'menu' | 'editProfile' | 'accountDetails';
+type DrawerSection = null | 'menu' | 'editProfile' | 'accountDetails' | 'feedback';
 type ActivitySubTab = 'hyped' | 'commented' | 'saved';
 
 export default function ProfilePage() {
-    const { user, userProfile, logout } = useAuth();
+    const { user, userProfile, logout, isAdmin } = useAuth();
     const router = useRouter();
 
     const [activeTab, setActiveTab] = useState<'reports' | 'activity'>('reports');
@@ -35,8 +42,13 @@ export default function ProfilePage() {
     const [savedIssues, setSavedIssues] = useState<Issue[]>([]);
     const [loadingActivity, setLoadingActivity] = useState(true);
 
+    // Follower Stats
+    const [followersCount, setFollowersCount] = useState(0);
+    const [followingCount, setFollowingCount] = useState(0);
+
     // Drawer
     const [drawer, setDrawer] = useState<DrawerSection>(null);
+    const [connectionsModalType, setConnectionsModalType] = useState<'followers' | 'following' | null>(null);
 
     // Edit Profile fields
     const [editName, setEditName] = useState('');
@@ -50,6 +62,25 @@ export default function ProfilePage() {
     // City combobox
     const [citySearch, setCitySearch] = useState('');
     const [isCityDropdownOpen, setIsCityDropdownOpen] = useState(false);
+
+    // Feedback
+    const [feedbackMsg, setFeedbackMsg] = useState('');
+    const [submittingFeedback, setSubmittingFeedback] = useState(false);
+
+    // Gamification
+    const [gamification, setGamification] = useState<{
+        xp: number; level: ReturnType<typeof getLevelFromXp>;
+        xpProgress: ReturnType<typeof getXpProgress>;
+        badges: GBadge[]; currentStreak: number; longestStreak: number;
+        stats: { totalReports: number; totalVerifications: number; totalComments: number; totalResolved: number };
+    } | null>(null);
+    const [trustInfo, setTrustInfo] = useState<{ 
+        trustScore: number; 
+        tier: ReturnType<typeof getVoteWeightTier>;
+        accurateVotes: number;
+        wrongVotes: number;
+    } | null>(null);
+    const [cityRank, setCityRank] = useState<number>(0);
 
     const filteredCities = citySearch === ''
         ? INDIAN_CITIES.sort((a, b) => a.tier - b.tier).slice(0, 8)
@@ -76,6 +107,41 @@ export default function ProfilePage() {
         };
         fetchReports();
     }, [user]);
+
+    // Load follower stats
+    useEffect(() => {
+        if (!user) return;
+        const fetchStats = async () => {
+            const stats = await getFollowStats(user.uid);
+            setFollowersCount(stats.followersCount);
+            setFollowingCount(stats.followingCount);
+        };
+        fetchStats();
+    }, [user]);
+
+    // Load gamification data
+    useEffect(() => {
+        if (!user) return;
+        const fetchGamification = async () => {
+            const [gData, tData] = await Promise.all([
+                getUserGamificationStats(user.uid),
+                getUserTrustStats(user.uid),
+            ]);
+            setGamification(gData);
+            setTrustInfo({ 
+                trustScore: tData.trustScore, 
+                tier: tData.tier,
+                accurateVotes: tData.accurateVotes,
+                wrongVotes: tData.wrongVotes
+            });
+
+            if (userProfile?.city) {
+                const rank = await getUserCityRank(userProfile.city, gData.xp);
+                setCityRank(rank);
+            }
+        };
+        fetchGamification();
+    }, [user, userProfile?.city]);
 
     // Load activity data when activity tab is selected
     useEffect(() => {
@@ -132,9 +198,23 @@ export default function ProfilePage() {
         try {
             let photoURL = user.photoURL || '';
             if (photoFile) {
-                const storageRef = ref(storage, `profile_photos/${user.uid}`);
-                const snap = await uploadBytes(storageRef, photoFile);
-                photoURL = await getDownloadURL(snap.ref);
+                const filePath = `profile_photos/${user.uid}`;
+                const { data, error } = await supabase.storage
+                    .from('media')
+                    .upload(filePath, photoFile, {
+                        upsert: true
+                    });
+                
+                if (error) {
+                    console.error('Supabase profile photo upload error:', error);
+                    throw new Error('Failed to upload profile photo to Supabase.');
+                }
+
+                const { data: publicUrlData } = supabase.storage
+                    .from('media')
+                    .getPublicUrl(filePath);
+                
+                photoURL = publicUrlData.publicUrl;
             }
             await updateProfile(user, {
                 displayName: editName || user.displayName,
@@ -157,7 +237,28 @@ export default function ProfilePage() {
 
     const handleSignOut = async () => {
         await logout();
-        router.push('/');
+        router.push('/login');
+    };
+
+    const submitFeedback = async () => {
+        if (!feedbackMsg.trim()) return;
+        setSubmittingFeedback(true);
+        try {
+            await addDoc(collection(db, 'feedbacks'), {
+                message: feedbackMsg.trim(),
+                userEmail: user?.email || 'Anonymous',
+                userId: user?.uid || 'Unknown',
+                createdAt: serverTimestamp()
+            });
+            setFeedbackMsg('');
+            setDrawer(null);
+            alert('Feedback submitted successfully!');
+        } catch (e) {
+            console.error(e);
+            alert('Failed to submit feedback.');
+        } finally {
+            setSubmittingFeedback(false);
+        }
     };
 
     // ── Derived values ────────────────────────────────────────────────────────
@@ -249,37 +350,143 @@ export default function ProfilePage() {
 
                         {/* Right side: Name + Stats */}
                         <div className="flex flex-col flex-1 pl-2">
-                            <h1 className="text-[15px] font-bold text-gray-900 leading-tight mb-3">{displayName}</h1>
-                            <div className="flex justify-between text-center w-full">
-                                <div className="flex flex-col">
-                                    <span className="font-semibold text-gray-900 text-[15px] leading-none">{myReports.length}</span>
-                                    <span className="text-[13px] text-gray-600 mt-1">reports</span>
+                            <h1 className="text-[15px] font-bold text-gray-900 leading-tight mb-3 flex items-center gap-2">
+                                {displayName}
+                                {isAdmin && <VerifiedBadge label="Admin" size="sm" />}
+                                {trustInfo && (
+                                    <TrustBadge
+                                        trustScore={trustInfo.trustScore}
+                                        tierName={trustInfo.tier.name}
+                                        tierColor={trustInfo.tier.color}
+                                        size="sm"
+                                    />
+                                )}
+                            </h1>
+                            <div className="flex gap-6 w-full">
+                                <div
+                                    className="flex flex-col cursor-pointer hover:opacity-80 transition-opacity"
+                                    onClick={() => setConnectionsModalType('followers')}
+                                >
+                                    <span className="font-semibold text-gray-900 text-[15px] leading-none">{followersCount}</span>
+                                    <span className="text-[13px] text-gray-600 mt-1">followers</span>
                                 </div>
-                                <div className="flex flex-col">
-                                    <span className="font-semibold text-gray-900 text-[15px] leading-none">{hypedIssues.length}</span>
-                                    <span className="text-[13px] text-gray-600 mt-1">hyped</span>
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="font-semibold text-gray-900 text-[15px] leading-none">{savedIssues.length}</span>
-                                    <span className="text-[13px] text-gray-600 mt-1">saved</span>
+                                <div
+                                    className="flex flex-col cursor-pointer hover:opacity-80 transition-opacity"
+                                    onClick={() => setConnectionsModalType('following')}
+                                >
+                                    <span className="font-semibold text-gray-900 text-[15px] leading-none">{followingCount}</span>
+                                    <span className="text-[13px] text-gray-600 mt-1">following</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
+                    {/* ── GAMIFICATION SECTION ── */}
+                    {gamification && (
+                        <div className="px-1 pt-3 pb-3">
+                            {/* Level + Trust Row */}
+                            <div className="flex items-center justify-between mb-3">
+                                <LevelBadge
+                                    level={gamification.level.level}
+                                    title={gamification.level.title}
+                                    emoji={gamification.level.emoji}
+                                    color={gamification.level.color}
+                                />
+                            </div>
+
+                            {/* XP Progress */}
+                            <XpProgressBar
+                                xp={gamification.xp}
+                                progress={gamification.xpProgress.progress}
+                                currentLevelXp={gamification.xpProgress.currentLevelXp}
+                                nextLevelXp={gamification.xpProgress.nextLevelXp}
+                                levelColor={gamification.level.color}
+                                currentLevel={gamification.level.level}
+                            />
+
+                            {/* Streak + Impact Stats */}
+                            <div className="flex items-center justify-between mt-3">
+                                <StreakDisplay
+                                    currentStreak={gamification.currentStreak}
+                                    longestStreak={gamification.longestStreak}
+                                />
+                                <div className="flex gap-3 text-center">
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-bold text-emerald-600">{gamification.stats.totalResolved}</span>
+                                        <span className="text-[10px] text-gray-400 uppercase tracking-wide">Resolved</span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-bold text-blue-600">{gamification.stats.totalVerifications}</span>
+                                        <span className="text-[10px] text-gray-400 uppercase tracking-wide">Verified</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── CIVIC IMPACT SECTION ── */}
+                    {gamification && (
+                        <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 mb-6 mx-1">
+                            <h3 className="text-[13px] font-bold text-gray-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <Award size={16} className="text-blue-500" />
+                                Civic Impact
+                            </h3>
+                            <div className="grid grid-cols-2 gap-y-5 gap-x-2">
+                                <div className="flex flex-col">
+                                    <span className="text-2xl font-black text-gray-900">{myReports.length}</span>
+                                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Issues Reported</span>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-2xl font-black text-blue-600">{gamification.stats.totalVerifications}</span>
+                                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Issues Verified</span>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-2xl font-black text-emerald-600">{gamification.stats.totalResolved}</span>
+                                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Issues Resolved</span>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-2xl font-black text-purple-600">
+                                        {trustInfo && (trustInfo.accurateVotes + trustInfo.wrongVotes) > 0 
+                                            ? Math.round((trustInfo.accurateVotes / (trustInfo.accurateVotes + trustInfo.wrongVotes)) * 100) + '%'
+                                            : '--'}
+                                    </span>
+                                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Verification Accuracy</span>
+                                </div>
+                                <div className="flex flex-col col-span-2 mt-2 pt-4 border-t border-gray-200/60">
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex flex-col">
+                                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Contribution Score</span>
+                                            <span className="text-3xl font-black text-amber-500 flex items-center gap-1.5 mt-0.5">
+                                                <Zap size={22} className="fill-amber-500" /> {gamification.xp}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col text-right">
+                                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">City Rank</span>
+                                            <span className="text-2xl font-black text-gray-900 mt-0.5">
+                                                {cityRank > 0 ? `#${cityRank}` : '--'} <span className="text-sm font-semibold text-gray-500 ml-1">in {city || 'City'}</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* IG Tabs */}
                     <div className="flex border-t border-gray-100">
                         <button
                             onClick={() => setActiveTab('reports')}
-                            className={clsx("flex-1 py-3 flex justify-center border-b-2 transition-colors", activeTab === 'reports' ? "border-gray-900" : "border-transparent")}
+                            className={clsx("flex-1 py-3 flex items-center justify-center gap-2 border-b-2 transition-colors", activeTab === 'reports' ? "border-gray-900" : "border-transparent")}
                         >
-                            <FileText size={22} className={clsx("transition-colors", activeTab === 'reports' ? "text-gray-900" : "text-gray-300")} />
+                            <FileText size={20} className={clsx("transition-colors", activeTab === 'reports' ? "text-gray-900" : "text-gray-400")} />
+                            <span className={clsx("text-sm font-semibold transition-colors", activeTab === 'reports' ? "text-gray-900" : "text-gray-400")}>Reports</span>
                         </button>
                         <button
                             onClick={() => setActiveTab('activity')}
-                            className={clsx("flex-1 py-3 flex justify-center border-b-2 transition-colors", activeTab === 'activity' ? "border-gray-900" : "border-transparent")}
+                            className={clsx("flex-1 py-3 flex items-center justify-center gap-2 border-b-2 transition-colors", activeTab === 'activity' ? "border-gray-900" : "border-transparent")}
                         >
-                            <Heart size={22} className={clsx("transition-colors", activeTab === 'activity' ? "text-gray-900" : "text-gray-300")} />
+                            <Heart size={20} className={clsx("transition-colors", activeTab === 'activity' ? "text-gray-900" : "text-gray-400")} />
+                            <span className={clsx("text-sm font-semibold transition-colors", activeTab === 'activity' ? "text-gray-900" : "text-gray-400")}>My Activity</span>
                         </button>
                     </div>
                 </div>
@@ -435,6 +642,19 @@ export default function ProfilePage() {
                                                     <Info size={18} className="text-gray-500" />
                                                 </div>
                                                 <span className="text-sm font-semibold text-gray-800">Account Details</span>
+                                            </div>
+                                            <ChevronRight size={16} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
+                                        </button>
+
+                                        <button
+                                            onClick={() => setDrawer('feedback')}
+                                            className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-gray-50 transition-colors group"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center">
+                                                    <MessageSquare size={18} className="text-blue-500" />
+                                                </div>
+                                                <span className="text-sm font-semibold text-gray-800">Feedback</span>
                                             </div>
                                             <ChevronRight size={16} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
                                         </button>
@@ -615,10 +835,50 @@ export default function ProfilePage() {
                                 </div>
                             )}
 
+                            {/* ── FEEDBACK ── */}
+                            {drawer === 'feedback' && (
+                                <div className="flex flex-col h-full bg-white">
+                                    <div className="flex items-center gap-3 p-5 border-b border-gray-100 flex-shrink-0">
+                                        <button onClick={() => setDrawer('menu')} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 transition-colors">
+                                            <X size={18} />
+                                        </button>
+                                        <h2 className="text-base font-bold text-gray-900">Send Feedback</h2>
+                                    </div>
+
+                                    <div className="flex-1 p-5 overflow-y-auto">
+                                        <label className="block text-sm font-semibold text-gray-900 mb-2">We value your thoughts!</label>
+                                        <textarea
+                                            value={feedbackMsg}
+                                            onChange={(e) => setFeedbackMsg(e.target.value)}
+                                            rows={5}
+                                            placeholder="Tell us what you think or report bugs here..."
+                                            className="w-full bg-gray-50 rounded-xl px-4 py-3 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-transparent focus:border-transparent text-gray-800 resize-none transition-shadow"
+                                        />
+                                    </div>
+
+                                    <div className="p-4 border-t border-gray-100 flex-shrink-0">
+                                        <button
+                                            onClick={submitFeedback}
+                                            disabled={submittingFeedback || !feedbackMsg.trim()}
+                                            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            {submittingFeedback ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Submit Feedback'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                         </motion.div>
                     </>
                 )}
             </AnimatePresence>
+
+            <ConnectionsModal
+                isOpen={!!connectionsModalType}
+                onClose={() => setConnectionsModalType(null)}
+                type={connectionsModalType || 'followers'}
+                userId={user.uid}
+            />
         </div>
     );
 }

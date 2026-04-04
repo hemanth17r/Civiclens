@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createIssue } from '@/lib/issues';
 import { useAuth } from '@/context/AuthContext';
 import { INDIAN_CITIES } from '@/data/cities';
+import { supabase } from '@/lib/supabase';
 
 interface ReportIssueDialogProps {
     isOpen: boolean;
@@ -21,6 +22,10 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
     const [category, setCategory] = useState('');
     const [description, setDescription] = useState('');
     const [location, setLocation] = useState('');
+
+    // Media
+    const [mediaFiles, setMediaFiles] = useState<File[]>([]);
+    const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);
 
     // City Logic
     const [citySearch, setCitySearch] = useState('');
@@ -50,7 +55,27 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
         setLoading(true);
 
         try {
-            const imageUrl = ''; // Photo upload temporarily unavailable
+            // Upload Media via Supabase Storage
+            const uploadedUrls: string[] = [];
+            for (const file of mediaFiles) {
+                const uniqueName = Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9.\-_]/g, '');
+                const filePath = `${user.uid}/${uniqueName}`;
+                
+                const { data, error } = await supabase.storage
+                    .from('media')
+                    .upload(filePath, file);
+
+                if (error) {
+                    console.error('Supabase upload error:', error);
+                    throw new Error('Failed to upload media to Supabase.');
+                }
+
+                const { data: publicUrlData } = supabase.storage
+                    .from('media')
+                    .getPublicUrl(filePath);
+                    
+                uploadedUrls.push(publicUrlData.publicUrl);
+            }
 
             const cityData = INDIAN_CITIES.find(c => c.name === selectedCityName);
 
@@ -63,7 +88,8 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                 category,
                 description,
                 location,
-                imageUrl,
+                mediaUrls: uploadedUrls,
+                imageUrl: uploadedUrls.length > 0 ? uploadedUrls[0] : null, // Fallback for IssueCard expecting a primary image
                 userId: user.uid,
             };
 
@@ -94,7 +120,37 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
         setLocation('');
         setCitySearch('');
         setSelectedCityName(null);
+        setMediaFiles([]);
+        setMediaPreviews([]);
     }
+
+    const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files) return;
+        const newFiles = Array.from(e.target.files);
+
+        if (mediaFiles.length + newFiles.length > 3) {
+            alert('You can only upload up to 3 media files.');
+            return;
+        }
+
+        const validFiles = newFiles.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+        setMediaFiles(prev => [...prev, ...validFiles]);
+
+        validFiles.forEach(file => {
+            const objectUrl = URL.createObjectURL(file);
+            setMediaPreviews(prev => [...prev, objectUrl]);
+        });
+    };
+
+    const removeMedia = (index: number) => {
+        setMediaFiles(prev => prev.filter((_, i) => i !== index));
+        setMediaPreviews(prev => {
+            const newPreviews = [...prev];
+            URL.revokeObjectURL(newPreviews[index]);
+            newPreviews.splice(index, 1);
+            return newPreviews;
+        });
+    };
 
     return (
         <AnimatePresence>
@@ -128,13 +184,42 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
 
                         <div className="overflow-y-auto flex-1 p-6">
                             <form onSubmit={handleSubmit} className="space-y-4">
-                                {/* Photo Upload — temporarily unavailable until Firebase Storage is provisioned */}
+                                {/* Media Upload */}
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">Photo Evidence</label>
-                                    <div className="border-2 border-dashed border-amber-200 bg-amber-50 rounded-xl p-6 flex flex-col items-center justify-center text-amber-600 gap-1">
-                                        <Camera size={32} className="mb-1 opacity-50" />
-                                        <span className="font-semibold text-sm">Photo upload coming soon</span>
-                                        <span className="text-xs text-amber-500 text-center">Photo uploads are temporarily unavailable. You can still submit your report without a photo.</span>
+                                    <label className="text-sm font-medium text-gray-700">Photo / Video Evidence (Max 3)</label>
+                                    <div className="flex gap-3 overflow-x-auto pb-2">
+                                        {/* Previews */}
+                                        {mediaPreviews.map((previewUrl, idx) => (
+                                            <div key={idx} className="relative w-24 h-24 flex-shrink-0 bg-gray-100 rounded-xl overflow-hidden border border-gray-200">
+                                                {mediaFiles[idx]?.type.startsWith('video/') ? (
+                                                    <video src={previewUrl} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeMedia(idx)}
+                                                    className="absolute top-1 right-1 bg-white/90 p-1 rounded-full shadow-sm hover:bg-red-50 hover:text-red-500 transition-colors"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+
+                                        {/* Add Button */}
+                                        {mediaPreviews.length < 3 && (
+                                            <div className="relative w-24 h-24 flex-shrink-0 border-2 border-dashed border-gray-300 hover:border-blue-400 bg-gray-50 hover:bg-blue-50 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:text-blue-500 transition-colors cursor-pointer group">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*,video/*"
+                                                    multiple
+                                                    onChange={handleMediaChange}
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                />
+                                                <Camera size={24} className="mb-1 group-hover:scale-110 transition-transform" />
+                                                <span className="text-[10px] font-semibold">Add Media</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 

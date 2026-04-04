@@ -6,9 +6,10 @@ import { ShieldCheck } from 'lucide-react';
 interface VerifiedBadgeProps {
     department?: string;
     size?: 'sm' | 'md';
+    label?: string;
 }
 
-export default function VerifiedBadge({ department, size = 'sm' }: VerifiedBadgeProps) {
+export default function VerifiedBadge({ department, size = 'sm', label = 'Official' }: VerifiedBadgeProps) {
     const isSmall = size === 'sm';
     return (
         <span
@@ -19,7 +20,7 @@ export default function VerifiedBadge({ department, size = 'sm' }: VerifiedBadge
                 }`}
         >
             <ShieldCheck size={isSmall ? 10 : 14} className="text-blue-600 flex-shrink-0" />
-            Official{department ? ` · ${department}` : ''}
+            {label}{department ? ` · ${department}` : ''}
         </span>
     );
 }

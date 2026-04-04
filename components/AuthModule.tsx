@@ -18,14 +18,6 @@ export default function AuthModule({ isOpen, onClose, triggerAction = "to join t
     const [isSent, setIsSent] = useState(false);
     const [error, setError] = useState('');
 
-    useEffect(() => {
-        if (!isOpen) {
-            setEmail('');
-            setIsLoading(false);
-            setIsSent(false);
-            setError('');
-        }
-    }, [isOpen]);
 
     const handleEmailSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -85,6 +77,8 @@ export default function AuthModule({ isOpen, onClose, triggerAction = "to join t
 
                         {!isSent ? (
                             <div className="w-full space-y-6">
+
+
                                 <button
                                     type="button"
                                     onClick={async () => {
