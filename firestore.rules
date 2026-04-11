@@ -11,13 +11,34 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.admin == true ||
+        request.auth.token.email == 'hemanthreddya276@gmail.com'
+      );
+    }
+
     // Users Collection
     match /users/{userId} {
-      // Anyone can read a user profile (needed for displaying names on reports)
+      // Anyone authenticated can read a user profile (needed for displaying names on reports)
       allow read: if isAuthenticated();
-      // Only the user themselves can write to their own profile, but they CANNOT update sensitive gamification fields.
+      // Only the user themselves can write to their own profile, but they CANNOT update sensitive fields.
       allow create: if isAuthenticated() && isOwner(userId);
-      allow update: if isAuthenticated() && isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['xp', 'level', 'levelTitle', 'badges', 'gamificationStats', 'currentStreak', 'longestStreak', 'lastActiveDate']));
+      allow update: if isAuthenticated() && isOwner(userId) && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          // Gamification fields (server-only via Admin SDK)
+          'xp', 'level', 'levelTitle', 'badges', 'gamificationStats',
+          'currentStreak', 'longestStreak', 'lastActiveDate',
+          // Trust fields (server-only)
+          'trustScore', 'trustUpdatedAt', 'trustStats',
+          // Moderation fields (admin-only)
+          'isBlocked',
+          // Role fields (admin-only)
+          'role', 'department', 'jurisdiction',
+          // Counter fields (transaction-managed, not directly settable)
+          'followersCount', 'followingCount'
+        ])
+      );
       allow delete: if false; // Soft deletes preferred
 
       // Vote rate-limiting log (anti-manipulation)
@@ -28,7 +49,7 @@ service cloud.firestore {
 
     // Issues Collection
     match /issues/{issueId} {
-      allow read: if isAuthenticated(); // All authenticated users can read issues
+      allow read: if true; // Public read for landing feed
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       
       // Non-owners can only update social counters/status flags. Owners can update general fields (but not change ownership)
@@ -44,59 +65,97 @@ service cloud.firestore {
         allow create: if isAuthenticated();
         allow update, delete: if false;
       }
+
+      // Hypes subcollection (stored as issues/{issueId}/hypes/{userId})
+      match /hypes/{hypeId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isOwner(hypeId);
+        allow delete: if isAuthenticated() && isOwner(hypeId);
+        allow update: if false;
+      }
+
+      // Saves subcollection (stored as issues/{issueId}/saves/{userId})
+      match /saves/{saveId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isOwner(saveId);
+        allow delete: if isAuthenticated() && isOwner(saveId);
+        allow update: if false;
+      }
+
+      // Comments subcollection (stored as issues/{issueId}/comments/{commentId})
+      match /comments/{commentId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+        allow update: if isAuthenticated() && isOwner(resource.data.userId);
+        allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+
+        // Replies subcollection
+        match /replies/{replyId} {
+          allow read: if isAuthenticated();
+          allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+          allow update: if isAuthenticated() && isOwner(resource.data.userId);
+          allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+        }
+
+        // Comment likes subcollection
+        match /likes/{likeUserId} {
+          allow read: if isAuthenticated();
+          allow create: if isAuthenticated() && isOwner(likeUserId);
+          allow delete: if isAuthenticated() && isOwner(likeUserId);
+          allow update: if false;
+        }
+      }
+
+      // Status votes subcollection (crowdsourced status voting)
+      match /statusVotes/{voteId} {
+        allow read: if isAuthenticated();
+        // Users can only create/update their own votes (voteId starts with their UID)
+        allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+        allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+        allow delete: if false;
+      }
+    }
+
+    // Follows Collection (top-level: follows/{followerId_targetId})
+    match /follows/{followId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.followerId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.followerId == request.auth.uid;
+      allow update: if false;
     }
     
-    // Comments
-    match /comments/{commentId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && isOwner(resource.data.userId);
-      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
-    }
-
-    // Hypes / Upvotes
-    match /hypes/{hypeId} {
-      allow read: if isAuthenticated();
-      allow create, update, delete: if isAuthenticated() && hypeId.matches('.*_' + request.auth.uid + '.*');
-    }
-
-    // Saves
-    match /saves/{saveId} {
-      allow read: if isAuthenticated() && isOwner(resource.data.userId);
-      allow create, update, delete: if isAuthenticated() && isOwner(request.resource.data.userId);
-    }
-
-    // Notifications
+    // Notifications — only admin or server-side (Admin SDK) can create
+    // Users can only read/update/delete their own notifications
     match /notifications/{notificationId} {
-      allow read: if isAuthenticated() && isOwner(resource.data.userId);
-      allow create: if isAuthenticated(); // System or others can create notifications
-      allow update: if isAuthenticated() && isOwner(resource.data.userId); // Marking as read
-      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+      allow read: if isAuthenticated() && resource.data.targetUid == request.auth.uid;
+      allow create: if isAdmin(); // Only admin/server can create notifications (Admin SDK bypasses rules)
+      allow update: if isAuthenticated() && resource.data.targetUid == request.auth.uid; // Marking as read
+      allow delete: if isAuthenticated() && resource.data.targetUid == request.auth.uid;
     }
     
     // Feedbacks
     match /feedbacks/{feedbackId} {
       allow create: if isAuthenticated();
-      // Only admins should read, but we will simplify for now
-      allow read: if isAuthenticated();
+      // Only admins should read
+      allow read: if isAdmin();
     }
     
     // User Reports
     match /user_reports/{reportId} {
       allow create: if isAuthenticated() && request.resource.data.reporterUid == request.auth.uid;
-      allow read: if isAuthenticated() && isOwner(resource.data.reporterUid);
+      allow read: if isAuthenticated() && (isOwner(resource.data.reporterUid) || isAdmin());
     }
 
-    // Missions
+    // Missions — only admin/server can create/update missions
     match /missions/{missionId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated(); // System creates; update for completion count
+      allow create, update: if isAdmin(); // Only admin can create/modify missions
       allow delete: if false;
 
       // Mission Progress (per-user)
       match /progress/{userId} {
         allow read: if isAuthenticated() && isOwner(userId);
-        allow create, update: if false; // Only server (Admin SDK) can update mission progress to prevent client manipulation
+        allow create, update: if false; // Only server (Admin SDK) can update mission progress
         allow delete: if false;
       }
     }

@@ -163,7 +163,7 @@ export async function getActiveMissions(userCity: string): Promise<Mission[]> {
             .map(d => ({ id: d.id, ...d.data() } as Mission))
             .filter(m => m.city === 'global' || m.city === userCity);
     } catch (error) {
-        console.error('Failed to fetch missions:', error);
+        console.warn('Failed to fetch missions:', error);
         return [];
     }
 }
@@ -191,7 +191,7 @@ export async function getUserMissionProgress(
 
         return result;
     } catch (error) {
-        console.error('Failed to fetch mission progress:', error);
+        console.warn('Failed to fetch mission progress:', error);
         return {};
     }
 }

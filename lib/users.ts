@@ -30,7 +30,7 @@ export const getTopContributorsByCity = async (cityName: string, limitCount: num
             ...doc.data()
         } as UserProfile));
     } catch (error) {
-        console.error('Error fetching top contributors:', error);
+        console.warn('Error fetching top contributors:', error);
         return [];
     }
 };
@@ -49,7 +49,7 @@ export const getUserCityRank = async (cityName: string, userXp: number): Promise
         const snapshot = await getCountFromServer(q);
         return snapshot.data().count + 1;
     } catch (error) {
-        console.error('Error fetching city rank:', error);
+        console.warn('Error fetching city rank:', error);
         return 0; // Return 0 or null if error
     }
 };

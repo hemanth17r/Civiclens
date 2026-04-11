@@ -24,6 +24,22 @@ import {
     Timestamp
 } from "firebase/firestore";
 
+/**
+ * Handle Firestore permission-denied errors by retrying after a short delay.
+ * Useful for the split-second after login before auth tokens propagate.
+ */
+const withRetry = async <T>(fn: () => Promise<T>, retries = 3): Promise<T> => {
+    try {
+        return await fn();
+    } catch (e: any) {
+        if (retries > 0 && (e.code === 'permission-denied' || e.message?.includes('permissions'))) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            return withRetry(fn, retries - 1);
+        }
+        throw e;
+    }
+};
+
 export interface IssueData {
     title: string;
     category: string;
@@ -83,7 +99,7 @@ export const getIssueById = async (issueId: string): Promise<Issue | null> => {
         if (!snap.exists()) return null;
         return { id: snap.id, ...snap.data() } as Issue;
     } catch (error) {
-        console.error('Error fetching issue by ID:', error);
+        console.warn('Error fetching issue by ID:', error);
         return null;
     }
 };
@@ -134,7 +150,7 @@ export const getFeedIssues = async (
             limit(50)
         );
 
-        const localSnapshot = await getDocs(localQuery);
+        const localSnapshot = await withRetry(() => getDocs(localQuery));
         let issues = localSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
 
         // 3. Sort: user's exact city first, then by hype
@@ -148,8 +164,8 @@ export const getFeedIssues = async (
         // Return whatever exists — no artificial fallback
         return issues.slice(0, 20);
 
-    } catch (error) {
-        console.error('Error fetching feed:', error);
+    } catch (error: any) {
+        console.warn('Error fetching feed:', error.message);
         return [];
     }
 };
@@ -168,7 +184,7 @@ export const getTrendingIssues = async (category?: string) => {
             limit(50)
         );
 
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await withRetry(() => getDocs(q));
         let issues = querySnapshot.docs.map(d => ({
             id: d.id,
             ...d.data()
@@ -193,8 +209,8 @@ export const getTrendingIssues = async (category?: string) => {
 
         scored.sort((a, b) => b._trendScore - a._trendScore);
         return scored.slice(0, 20);
-    } catch (error) {
-        console.error("Error fetching trending issues:", error);
+    } catch (error: any) {
+        console.warn("Error fetching trending issues:", error.message);
         return [];
     }
 };
@@ -217,7 +233,7 @@ export const getLeaderboardIssues = async (cityName: string | null) => {
             );
         }
 
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await withRetry(() => getDocs(q));
         const issues = querySnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
@@ -235,8 +251,8 @@ export const getLeaderboardIssues = async (cityName: string | null) => {
 
         // Return top 5
         return rankedIssues.slice(0, 5);
-    } catch (error) {
-        console.error("Error fetching leaderboard issues:", error);
+    } catch (error: any) {
+        console.warn("Error fetching leaderboard issues:", error.message);
         return [];
     }
 };
@@ -316,7 +332,7 @@ export const getPaginatedIssues = async (lastDoc: DocumentSnapshot | null = null
         conditions.push(limit(pageSize));
 
         const q = query(baseQuery, ...conditions);
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await withRetry(() => getDocs(q));
         const issues = querySnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
@@ -326,7 +342,7 @@ export const getPaginatedIssues = async (lastDoc: DocumentSnapshot | null = null
 
         return { issues, lastVisible };
     } catch (error) {
-        console.error("Error fetching paginated issues:", error);
+        console.warn("Error fetching paginated issues:", error);
         return { issues: [], lastVisible: null };
     }
 };
@@ -477,12 +493,27 @@ export const addComment = async (
         createdAt: serverTimestamp()
     };
     if (avatarUrl) commentData.userAvatar = avatarUrl;
-    if (isOfficial) {
-        commentData.isOfficial = true;
-        commentData.department = department || '';
-    }
-    if (isAdmin) {
-        commentData.isAdmin = true;
+
+    // Verify isOfficial/isAdmin against the user's actual profile to prevent impersonation
+    if (isOfficial || isAdmin) {
+        try {
+            const userSnap = await getDoc(doc(db, 'users', userId));
+            if (userSnap.exists()) {
+                const userData = userSnap.data();
+                // Only set isOfficial if the user actually has the 'official' role
+                if (isOfficial && userData.role === 'official') {
+                    commentData.isOfficial = true;
+                    commentData.department = userData.department || department || '';
+                }
+                // Only set isAdmin if the user is actually an admin (hardcoded email check as fallback)
+                if (isAdmin && (userData.role === 'official' || userData.email === 'hemanthreddya276@gmail.com')) {
+                    commentData.isAdmin = true;
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to verify user role for comment:', e);
+            // Fail-safe: do NOT set privileged flags if verification fails
+        }
     }
 
     const docRef = await addDoc(collection(db, 'issues', issueId, 'comments'), commentData);
@@ -508,7 +539,7 @@ export const getComments = async (issueId: string): Promise<CommentData[]> => {
         collection(db, 'issues', issueId, 'comments'),
         orderBy('createdAt', 'asc')
     );
-    const snapshot = await getDocs(q);
+    const snapshot = await withRetry(() => getDocs(q));
     return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CommentData));
 };
 
@@ -542,7 +573,7 @@ export const getReplies = async (issueId: string, commentId: string): Promise<Re
         collection(db, 'issues', issueId, 'comments', commentId, 'replies'),
         orderBy('createdAt', 'asc')
     );
-    const snapshot = await getDocs(q);
+    const snapshot = await withRetry(() => getDocs(q));
     return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ReplyData));
 };
 
@@ -774,7 +805,7 @@ const fetchIssuesByIds = async (ids: string[]): Promise<Issue[]> => {
         collection(db, 'issues'),
         where('__name__', 'in', uniqueIds)
     );
-    const snapshot = await getDocs(q);
+    const snapshot = await withRetry(() => getDocs(q));
     return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
 };
 
@@ -786,11 +817,11 @@ export const getUserHypedIssues = async (userId: string): Promise<Issue[]> => {
             orderBy('createdAt', 'desc'),
             limit(30)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         const issueIds = snapshot.docs.map(d => d.data().issueId || d.ref.parent.parent?.id).filter(Boolean) as string[];
         return fetchIssuesByIds(issueIds);
     } catch (error) {
-        console.error("Error fetching hyped issues:", error);
+        console.warn("Error fetching hyped issues:", error);
         return [];
     }
 };
@@ -803,7 +834,7 @@ export const getUserCommentedIssues = async (userId: string): Promise<Issue[]> =
             orderBy('createdAt', 'desc'),
             limit(30)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         // Validate: only include docs that are real comments with text content
         const issueIds: string[] = [];
         for (const d of snapshot.docs) {
@@ -815,7 +846,7 @@ export const getUserCommentedIssues = async (userId: string): Promise<Issue[]> =
         const uniqueIds = [...new Set(issueIds)];
         return fetchIssuesByIds(uniqueIds);
     } catch (error) {
-        console.error("Error fetching commented issues:", error);
+        console.warn("Error fetching commented issues:", error);
         return [];
     }
 };
@@ -831,7 +862,7 @@ export const deleteUserCommentsForIssue = async (issueId: string, userId: string
             collection(db, 'issues', issueId, 'comments'),
             where('userId', '==', userId)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         let deleted = 0;
         for (const d of snapshot.docs) {
             await deleteDoc(d.ref);
@@ -859,11 +890,11 @@ export const getUserSavedIssues = async (userId: string): Promise<Issue[]> => {
             orderBy('createdAt', 'desc'),
             limit(30)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         const issueIds = snapshot.docs.map(d => d.data().issueId || d.ref.parent.parent?.id).filter(Boolean) as string[];
         return fetchIssuesByIds(issueIds);
     } catch (error) {
-        console.error("Error fetching saved issues:", error);
+        console.warn("Error fetching saved issues:", error);
         return [];
     }
 };
@@ -887,7 +918,7 @@ export const searchUsers = async (searchQuery: string): Promise<UserSearchResult
             where('handle', '<', end.toLowerCase()),
             limit(10)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         return snapshot.docs.map(d => {
             const data = d.data();
             return {
@@ -898,7 +929,7 @@ export const searchUsers = async (searchQuery: string): Promise<UserSearchResult
             };
         });
     } catch (error) {
-        console.error("Error searching users:", error);
+        console.warn("Error searching users:", error);
         return [];
     }
 };
@@ -912,7 +943,7 @@ export const searchIssues = async (searchQuery: string): Promise<Issue[]> => {
             orderBy('createdAt', 'desc'),
             limit(100)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         const all = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
         const lower = searchQuery.toLowerCase();
         return all.filter(i =>
@@ -922,7 +953,7 @@ export const searchIssues = async (searchQuery: string): Promise<Issue[]> => {
             (i.category?.toLowerCase().includes(lower))
         ).slice(0, 20);
     } catch (error) {
-        console.error("Error searching issues:", error);
+        console.warn("Error searching issues:", error);
         return [];
     }
 };
@@ -944,7 +975,7 @@ export const getOfficialFeed = async (department: string, jurisdiction: string):
             orderBy('createdAt', 'desc'),
             limit(200)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         const issues = snapshot.docs
             .map(d => ({ id: d.id, ...d.data() } as Issue))
             .filter(i => {
@@ -956,7 +987,7 @@ export const getOfficialFeed = async (department: string, jurisdiction: string):
             });
         return issues;
     } catch (error) {
-        console.error("Error fetching official feed:", error);
+        console.warn("Error fetching official feed:", error);
         return [];
     }
 };
@@ -1028,7 +1059,7 @@ export const getDepartmentStats = async (jurisdiction?: string): Promise<Departm
             limit(500)
         ];
         const q = query(collection(db, 'issues'), ...constraints);
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         const issues = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
 
         // Filter by jurisdiction client-side if provided
@@ -1063,7 +1094,7 @@ export const getDepartmentStats = async (jurisdiction?: string): Promise<Departm
             priorResolved: d.prior
         })).sort((a, b) => b.resolved - a.resolved);
     } catch (error) {
-        console.error("Error getting department stats:", error);
+        console.warn("Error getting department stats:", error);
         return [];
     }
 };
@@ -1079,7 +1110,7 @@ export const getFastestResolved = async (limitN: number = 5): Promise<Issue[]> =
             orderBy('resolvedAt', 'desc'),
             limit(100)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         const issues = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
 
         // Sort by resolution speed (fastest first)
@@ -1092,7 +1123,7 @@ export const getFastestResolved = async (limitN: number = 5): Promise<Issue[]> =
             })
             .slice(0, limitN);
     } catch (error) {
-        console.error("Error getting fastest resolved:", error);
+        console.warn("Error getting fastest resolved:", error);
         return [];
     }
 };
@@ -1107,13 +1138,13 @@ export const getMostHypedUnresolved = async (limitN: number = 5): Promise<Issue[
             orderBy('votes', 'desc'),
             limit(100)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         return snapshot.docs
             .map(d => ({ id: d.id, ...d.data() } as Issue))
             .filter(i => i.status !== 'Resolved')
             .slice(0, limitN);
     } catch (error) {
-        console.error("Error getting most hyped unresolved:", error);
+        console.warn("Error getting most hyped unresolved:", error);
         return [];
     }
 };
@@ -1128,14 +1159,14 @@ export const getTopIssuesByCity = async (cityName: string, limitN: number = 5): 
             where('cityName', '==', cityName),
             limit(100)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         return snapshot.docs
             .map(d => ({ id: d.id, ...d.data() } as Issue))
             .filter(i => i.status !== 'Resolved')
             .sort((a, b) => (b.votes || 0) - (a.votes || 0))
             .slice(0, limitN);
     } catch (error) {
-        console.error("Error getting top issues by city:", error);
+        console.warn("Error getting top issues by city:", error);
         return [];
     }
 };
@@ -1151,7 +1182,7 @@ export const getTopInProgressByCity = async (cityName: string, limitN: number = 
             where('status', '==', 'Active'),
             limit(100)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         const issues = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
         // Sort newest first
         return issues.sort((a, b) => {
@@ -1160,7 +1191,7 @@ export const getTopInProgressByCity = async (cityName: string, limitN: number = 
             return tB - tA;
         }).slice(0, limitN);
     } catch (error) {
-        console.error("Error getting in progress issues by city:", error);
+        console.warn("Error getting in progress issues by city:", error);
         return [];
     }
 };
@@ -1176,7 +1207,7 @@ export const getTopResolvedByCity = async (cityName: string, limitN: number = 5)
             where('status', '==', 'Resolved'),
             limit(100)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         const issues = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
         // Sort newest resolved first
         return issues.sort((a, b) => {

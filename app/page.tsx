@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { getFeedIssues, Issue } from '@/lib/issues';
@@ -88,6 +88,7 @@ export default function Home() {
     const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
     const [authTrigger, setAuthTrigger] = useState('to contribute');
+    const isGsiInitialized = useRef(false);
 
     // ── Determine user state after auth resolves ──────────────────────────────
     useEffect(() => {
@@ -105,20 +106,29 @@ export default function Home() {
             }
 
             // Logged in → check whether they've ever reported
-            try {
-                const q = query(
-                    collection(db, 'issues'),
-                    where('userId', '==', user.uid),
-                    limit(1)
-                );
-                const snapshot = await getDocs(q);
-                setUserState(snapshot.empty ? 'B' : 'C');
-            } catch (e) {
-                console.error('Error checking user reports:', e);
-                setUserState('B'); // safe fallback
-            } finally {
-                setStatsLoading(false);
-            }
+            // NOTE: We use a small retry/delay because sometimes Firestore reports permission error 
+            // the split-second after login before the token propagates.
+            const tryFetch = async (retries = 3): Promise<void> => {
+                try {
+                    const q = query(
+                        collection(db, 'issues'),
+                        where('userId', '==', user.uid),
+                        limit(1)
+                    );
+                    const snapshot = await getDocs(q);
+                    setUserState(snapshot.empty ? 'B' : 'C');
+                } catch (e: any) {
+                    if (retries > 0 && (e.code === 'permission-denied' || e.message?.includes('permissions'))) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        return tryFetch(retries - 1);
+                    }
+                    console.warn('Error checking user reports:', e.message);
+                    setUserState('B'); // safe fallback
+                }
+            };
+
+            await tryFetch();
+            setStatsLoading(false);
         };
 
         checkUserStatus();
@@ -262,17 +272,19 @@ export default function Home() {
                     src="https://accounts.google.com/gsi/client"
                     strategy="afterInteractive"
                     onLoad={() => {
-                        if ((window as any).google) {
+                        if ((window as any).google && !isGsiInitialized.current) {
                             (window as any).google.accounts.id.initialize({
                                 client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || 'dummy-client-id',
                                 callback: (response: any) => {
                                     loginWithGoogleCredential(response.credential).catch(console.error);
                                 },
-                                use_fedcm_for_prompt: true,
+                                use_fedcm_for_prompt: false, // 🛠️ Disabled to avoid FedCM AbortError
                             });
                             (window as any).google.accounts.id.prompt((notification: any) => {
                                 if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
                                     console.log('One Tap prompt was skipped or not displayed:', notification.getNotDisplayedReason() || notification.getSkippedReason());
+                                } else {
+                                    isGsiInitialized.current = true;
                                 }
                             });
                         }

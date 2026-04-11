@@ -36,6 +36,26 @@ export interface NotificationData {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Handle Firestore permission-denied errors by retrying after a short delay.
+ * Useful for the split-second after login before auth tokens propagate.
+ */
+const withRetry = async <T>(fn: () => Promise<T>, retries = 3): Promise<T> => {
+    try {
+        return await fn();
+    } catch (e: any) {
+        if (retries > 0 && (e.code === 'permission-denied' || e.message?.includes('permissions'))) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            return withRetry(fn, retries - 1);
+        }
+        throw e;
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════
 // CRUD OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -48,7 +68,7 @@ export const createNotification = async (data: Omit<NotificationData, 'id' | 'cr
         });
         return docRef.id;
     } catch (e) {
-        console.error('Error creating notification:', e);
+        console.warn('Error creating notification:', e);
         return null;
     }
 };
@@ -56,21 +76,23 @@ export const createNotification = async (data: Omit<NotificationData, 'id' | 'cr
 export const getNotifications = async (uid: string, limitN: number = 30): Promise<NotificationData[]> => {
     if (!uid) return [];
     try {
-        const q = query(
-            collection(db, 'notifications'),
-            where('targetUid', '==', uid)
-        );
-        const snapshot = await getDocs(q);
-        const all = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as NotificationData));
-        return all
-            .sort((a, b) => {
-                const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-                const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-                return bTime - aTime;
-            })
-            .slice(0, limitN);
-    } catch (e) {
-        console.error('Error fetching notifications:', e);
+        return await withRetry(async () => {
+            const q = query(
+                collection(db, 'notifications'),
+                where('targetUid', '==', uid)
+            );
+            const snapshot = await getDocs(q);
+            const all = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as NotificationData));
+            return all
+                .sort((a, b) => {
+                    const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+                    const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+                    return bTime - aTime;
+                })
+                .slice(0, limitN);
+        });
+    } catch (e: any) {
+        console.warn('Error fetching notifications:', e.message);
         return [];
     }
 };
@@ -78,15 +100,17 @@ export const getNotifications = async (uid: string, limitN: number = 30): Promis
 export const getUnreadCount = async (uid: string): Promise<number> => {
     if (!uid) return 0;
     try {
-        const q = query(
-            collection(db, 'notifications'),
-            where('targetUid', '==', uid),
-            where('read', '==', false)
-        );
-        const snapshot = await getDocs(q);
-        return snapshot.size;
-    } catch (e) {
-        console.error('Error getting unread count:', e);
+        return await withRetry(async () => {
+            const q = query(
+                collection(db, 'notifications'),
+                where('targetUid', '==', uid),
+                where('read', '==', false)
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.size;
+        });
+    } catch (e: any) {
+        console.warn('Error getting unread count:', e.message);
         return 0;
     }
 };
@@ -94,8 +118,8 @@ export const getUnreadCount = async (uid: string): Promise<number> => {
 export const markAsRead = async (notifId: string): Promise<void> => {
     try {
         await updateDoc(doc(db, 'notifications', notifId), { read: true });
-    } catch (e) {
-        console.error('Error marking notification as read:', e);
+    } catch (e: any) {
+        console.warn('Error marking notification as read:', e.message);
     }
 };
 
@@ -110,8 +134,8 @@ export const markAllRead = async (uid: string): Promise<void> => {
         const batch = writeBatch(db);
         snapshot.docs.forEach(d => batch.update(d.ref, { read: true }));
         await batch.commit();
-    } catch (e) {
-        console.error('Error marking all as read:', e);
+    } catch (e: any) {
+        console.warn('Error marking all as read:', e.message);
     }
 };
 
@@ -139,8 +163,8 @@ const findOfficials = async (department: string, jurisdiction: string): Promise<
                 );
             })
             .map(d => d.id);
-    } catch (e) {
-        console.error('Error finding officials:', e);
+    } catch (e: any) {
+        console.warn('Error finding officials:', e.message);
         return [];
     }
 };
@@ -188,7 +212,7 @@ export const checkViralThreshold = async (issueId: string): Promise<void> => {
         }
         await batch.commit();
     } catch (e) {
-        console.error('Error checking viral threshold:', e);
+        console.warn('Error checking viral threshold:', e);
     }
 };
 
@@ -249,7 +273,7 @@ export const checkSLABreach = async (issueId: string): Promise<boolean> => {
 
         return breached;
     } catch (e) {
-        console.error('Error checking SLA breach:', e);
+        console.warn('Error checking SLA breach:', e);
         return false;
     }
 };
@@ -391,13 +415,18 @@ export const notifyAuthorStatusUpdate = async (
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// DEV TESTING HELPERS
+// DEV TESTING HELPERS — gated to development environment only
 // ═══════════════════════════════════════════════════════════════════════
 
 /**
  * DEV ONLY: Set an issue's votes to the given count and trigger viral check.
+ * No-op in production builds.
  */
 export const simulateHypes = async (issueId: string, count: number = VIRAL_THRESHOLD): Promise<void> => {
+    if (process.env.NODE_ENV !== 'development') {
+        console.warn('simulateHypes is disabled outside development.');
+        return;
+    }
     try {
         await updateDoc(doc(db, 'issues', issueId), { votes: count });
         await checkViralThreshold(issueId);
@@ -408,8 +437,13 @@ export const simulateHypes = async (issueId: string, count: number = VIRAL_THRES
 
 /**
  * DEV ONLY: Set an issue's createdAt to 72+ hours ago and trigger SLA check.
+ * No-op in production builds.
  */
 export const fastForward72h = async (issueId: string): Promise<void> => {
+    if (process.env.NODE_ENV !== 'development') {
+        console.warn('fastForward72h is disabled outside development.');
+        return;
+    }
     try {
         const pastTime = Timestamp.fromMillis(Date.now() - (SLA_HOURS + 1) * 60 * 60 * 1000);
         await updateDoc(doc(db, 'issues', issueId), { createdAt: pastTime });
@@ -418,3 +452,4 @@ export const fastForward72h = async (issueId: string): Promise<void> => {
         console.error('Error fast-forwarding:', e);
     }
 };
+

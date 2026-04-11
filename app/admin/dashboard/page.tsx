@@ -93,7 +93,7 @@ export default function AdminDashboardPage() {
             const reportsSnap = await getDocs(reportsQuery);
             setUserReports(reportsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         } catch (e) {
-            console.error('Error fetching admin data', e);
+            console.warn('Error fetching admin data', e);
         } finally {
             setFetching(false);
         }
@@ -123,7 +123,7 @@ export default function AdminDashboardPage() {
                 await notifyCitizenIssueApproved(id, title, targetUid);
             }
         } catch (e) {
-            console.error(e);
+            console.warn('Error approving issue:', e);
         }
     };
 
@@ -149,7 +149,7 @@ export default function AdminDashboardPage() {
             setRejectionRemark('');
             alert('Issue rejected and user notified.');
         } catch (e) {
-            console.error(e);
+            console.warn('Error rejecting issue:', e);
         }
     };
 

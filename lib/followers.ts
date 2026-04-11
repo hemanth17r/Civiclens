@@ -15,7 +15,7 @@ export const getFollowStatus = async (currentUid: string, targetUid: string): Pr
         const snap = await getDoc(followRef);
         return snap.exists();
     } catch (e) {
-        console.error('Error getting follow status:', e);
+        console.warn('Error getting follow status:', e);
         return false;
     }
 };
@@ -35,7 +35,7 @@ export const getFollowStats = async (uid: string): Promise<FollowStats> => {
         }
         return { followersCount: 0, followingCount: 0 };
     } catch (e) {
-        console.error('Error getting follow stats:', e);
+        console.warn('Error getting follow stats:', e);
         return { followersCount: 0, followingCount: 0 };
     }
 };
@@ -133,7 +133,7 @@ export const getFollowers = async (uid: string): Promise<any[]> => {
         const users = await Promise.all(usersFn);
         return users.filter(u => u !== null);
     } catch (e) {
-        console.error('Error getting followers:', e);
+        console.warn('Error getting followers:', e);
         return [];
     }
 };
@@ -161,7 +161,7 @@ export const getFollowing = async (uid: string): Promise<any[]> => {
         const users = await Promise.all(usersFn);
         return users.filter(u => u !== null);
     } catch (e) {
-        console.error('Error getting following:', e);
+        console.warn('Error getting following:', e);
         return [];
     }
 };

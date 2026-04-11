@@ -89,53 +89,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (typeof window !== 'undefined' && isSignInWithEmailLink(auth, window.location.href)) {
             let email = window.localStorage.getItem('emailForSignIn');
             if (!email) {
-                // User opened the link on a different device.
                 email = window.prompt('Please provide your email for confirmation to complete sign-in.');
             }
             if (email) {
                 signInWithEmailLink(auth, email, window.location.href)
-                    .then((result) => {
+                    .then(() => {
                         window.localStorage.removeItem('emailForSignIn');
-                        // Clean up URL parameters
                         window.history.replaceState(null, '', window.location.origin);
                     })
                     .catch((error) => {
-                        console.error('Error signing in with magic link:', error);
+                        console.warn('Error signing in with magic link:', error);
                     });
             }
         }
 
         const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
             setUser(currentUser);
-
-            if (currentUser) {
-                // If logged in, listen to their Firestore profile for the 'handle'
-                const userDocRef = doc(db, 'users', currentUser.uid);
-                const unsubscribeFirestore = onSnapshot(userDocRef, async (docSnap) => {
-                    if (docSnap.exists()) {
-                        const profileData = docSnap.data() as UserProfile;
-                        if (profileData.isBlocked) {
-                            // User is suspended, sign them out immediately
-                            await signOut(auth);
-                            setUser(null);
-                            setUserProfile(null);
-                            setLoading(false);
-                            alert("Your account has been suspended for violating community guidelines.");
-                            return;
-                        }
-                        setUserProfile(profileData);
-                    } else {
-                        // Profile doesn't exist yet (will optionally be created in onboarding)
-                        setUserProfile(null);
-                    }
-                    setLoading(false);
-                }, (error) => {
-                    console.error("Error fetching user profile:", error);
-                    setLoading(false);
-                });
-
-                return () => unsubscribeFirestore();
-            } else {
+            if (!currentUser) {
                 setUserProfile(null);
                 setLoading(false);
             }
@@ -143,6 +113,54 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         return () => unsubscribeAuth();
     }, []);
+
+    useEffect(() => {
+        if (!user) {
+            setUserProfile(null);
+            return;
+        }
+
+        const userDocRef = doc(db, 'users', user.uid);
+        let unsubscribeFirestore: (() => void) | null = null;
+
+        const setupListener = (retries: number) => {
+            // Guard: in case user becomes null during retry timeout
+            if (!auth.currentUser) return;
+
+            unsubscribeFirestore = onSnapshot(userDocRef, async (docSnap) => {
+                if (docSnap.exists()) {
+                    const profileData = docSnap.data() as UserProfile;
+                    if (profileData.isBlocked) {
+                        await signOut(auth);
+                        setUser(null);
+                        setUserProfile(null);
+                        setLoading(false);
+                        alert("Your account has been suspended.");
+                        return;
+                    }
+                    setUserProfile(profileData);
+                    setLoading(false);
+                } else {
+                    setUserProfile(null);
+                    setLoading(false);
+                }
+            }, (error) => {
+                if (retries > 0 && (error as any).code === 'permission-denied') {
+                    console.warn("Retrying profile listener...");
+                    setTimeout(() => setupListener(retries - 1), 1000);
+                } else {
+                    console.warn("Error fetching user profile:", error);
+                    setLoading(false);
+                }
+            });
+        };
+
+        setupListener(3);
+
+        return () => {
+            if (unsubscribeFirestore) unsubscribeFirestore();
+        };
+    }, [user]);
 
     const sendMagicLink = async (email: string) => {
         const actionCodeSettings = {
@@ -153,7 +171,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             await sendSignInLinkToEmail(auth, email, actionCodeSettings);
             window.localStorage.setItem('emailForSignIn', email);
         } catch (error) {
-            console.error("Magic link failed to send:", error);
+            console.warn("Magic link failed to send:", error);
             throw error;
         }
     };
@@ -163,7 +181,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const credential = GoogleAuthProvider.credential(idToken);
             await signInWithCredential(auth, credential);
         } catch (error) {
-            console.error("Google credential login failed:", error);
+            console.warn("Google credential login failed:", error);
             throw error;
         }
     };
@@ -172,7 +190,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             await signInWithPopup(auth, googleProvider);
         } catch (error) {
-            console.error("Google popup login failed:", error);
+            console.warn("Google popup login failed:", error);
             throw error;
         }
     };
@@ -181,11 +199,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             await signOut(auth);
         } catch (error) {
-            console.error("Logout failed:", error);
+            console.warn("Logout failed:", error);
         }
     };
 
-    const isAdmin = user?.email === 'hemanthreddya276@gmail.com';
+    // Admin check: prefer Firebase custom claims, fall back to hardcoded email
+    // To set custom claims: admin.auth().setCustomUserClaims(uid, { admin: true })
+    const isAdmin = (user as any)?.customClaims?.admin === true || user?.email === 'hemanthreddya276@gmail.com';
     const isOfficial = userProfile?.role === 'official' || isAdmin;
 
     return (
