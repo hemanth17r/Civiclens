@@ -1,93 +1,65 @@
 'use client';
 
 import React, { useState } from 'react';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { AtSign, Check, X, Loader2 } from 'lucide-react';
 
 export default function OnboardingModal() {
     const { user, userProfile, loading } = useAuth();
     const [handle, setHandle] = useState('');
-    const [isChecking, setIsChecking] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // If loading, or not logged in, or profile already has a handle -> Don't show
+    // If loading, or not logged in, or profile already has a handle → Don't show
     if (loading || !user || userProfile?.handle) return null;
 
-    const validateHandle = (value: string) => {
-        const regex = /^[a-zA-Z0-9_]{3,20}$/;
-        if (!regex.test(value)) {
-            return "3-20 chars, alphanumeric & underscores only.";
+    const validateHandle = (value: string): string | null => {
+        if (!value) return 'Handle is required.';
+        if (!/^[a-zA-Z0-9_]{3,20}$/.test(value)) {
+            return '3–20 chars, letters, numbers and underscores only.';
         }
         return null;
-    };
-
-    const checkHandleAvailability = async () => {
-        const validationError = validateHandle(handle);
-        if (validationError) {
-            setError(validationError);
-            return false;
-        }
-
-        setIsChecking(true);
-        setError(null);
-
-        // Ideally we query a "usernames" collection or dedicated index
-        // For Phase 2 MVP, we can just check if any user has this handle 
-        // OR rely on a unique constraint/rules. 
-        // For simplicity now: We will try to rely on client-side check if possible, 
-        // but since we query by ID usually, checking uniqueness requires a query.
-        // Let's assume for MVP we skip the race-condition strict check and just save.
-        // Real-world: Use a separate 'usernames' collection where Document ID = username.
-
-        // Let's try to query 'users' where handle == handle.
-        // NOTE: This requires an index. We might hit an error if index is missing.
-        // We will TRY to just save it for now and handle UI.
-
-        setIsChecking(false);
-        return true;
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user) return;
 
-        const isValid = await checkHandleAvailability(); // Simulating check
-        if (!isValid) return;
+        const validationError = validateHandle(handle);
+        if (validationError) {
+            setError(validationError);
+            return;
+        }
 
         setIsSubmitting(true);
+        setError(null);
 
         try {
-            const role = 'citizen';
+            // Get a fresh ID token to authenticate the server-side request
+            const idToken = await user.getIdToken(/* forceRefresh */ true);
 
-            const profileData: Record<string, any> = {
-                uid: user.uid,
-                email: user.email,
-                displayName: user.displayName || 'Anonymous',
-                photoURL: user.photoURL,
-                handle: `@${handle}`,
-                role,
-                createdAt: serverTimestamp(),
-                // Trust & Reputation defaults
-                trustScore: 0.3,
-                trustStats: { resolvedReports: 0, accurateVotes: 0, flaggedReports: 0, wrongVotes: 0 },
-                // Gamification defaults
-                xp: 0,
-                level: 1,
-                levelTitle: 'Observer',
-                badges: [],
-                currentStreak: 0,
-                longestStreak: 0,
-                gamificationStats: { totalReports: 0, totalVerifications: 0, totalComments: 0, totalResolved: 0 },
-            };
+            const response = await fetch('/api/profile/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`,
+                },
+                body: JSON.stringify({ handle }),
+            });
 
-            await setDoc(doc(db, 'users', user.uid), profileData);
-            // Profile updates, Modal will disappear via AuthContext listener
+            const data = await response.json();
+
+            if (!response.ok) {
+                // Surface the specific error from the server
+                setError(data.error || 'Failed to save profile. Try again.');
+                return;
+            }
+
+            // Success — AuthContext's onSnapshot listener will detect the
+            // new document and hide this modal automatically.
         } catch (err: any) {
-            console.error(err);
-            setError("Failed to save profile. Try again.");
+            console.error('[OnboardingModal] submit error:', err);
+            setError('Connection error. Check your connection and try again.');
         } finally {
             setIsSubmitting(false);
         }
@@ -118,6 +90,7 @@ export default function OnboardingModal() {
                                 setError(null);
                             }}
                             placeholder="username"
+                            maxLength={20}
                             className="block w-full pl-8 pr-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-xl text-lg font-semibold text-gray-900 focus:border-primary focus:ring-0 transition-colors"
                             autoFocus
                         />
@@ -131,7 +104,7 @@ export default function OnboardingModal() {
 
                     <button
                         type="submit"
-                        disabled={!handle || isChecking || isSubmitting}
+                        disabled={!handle || isSubmitting}
                         className="w-full bg-primary hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                         {isSubmitting ? (
