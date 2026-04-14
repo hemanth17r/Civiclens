@@ -153,6 +153,9 @@ export const getFeedIssues = async (
         const localSnapshot = await withRetry(() => getDocs(localQuery));
         let issues = localSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
 
+        // Filter out unapproved issues
+        issues = issues.filter(i => i.status && i.status !== 'Reported');
+
         // 3. Sort: user's exact city first, then by hype
         issues.sort((a, b) => {
             const aLocal = a.cityName === userCity.name ? 1 : 0;
@@ -190,6 +193,9 @@ export const getTrendingIssues = async (category?: string) => {
             ...d.data()
         } as Issue));
 
+        // Filter out unapproved issues
+        issues = issues.filter(i => i.status && i.status !== 'Reported');
+
         // Filter by category if provided
         if (category && category !== 'All') {
             issues = issues.filter(i => i.category === category);
@@ -221,14 +227,14 @@ export const getLeaderboardIssues = async (cityName: string | null) => {
         if (cityName) {
             q = query(
                 collection(db, 'issues'),
-                where('status', '==', 'Open'),
+                where('status', 'in', ['Verification Needed', 'Verified', 'Active']),
                 where('cityName', '==', cityName),
                 limit(100) // we fetch 100 and sort in memory because firestore can't sort by sum of fields
             );
         } else {
             q = query(
                 collection(db, 'issues'),
-                where('status', '==', 'Open'),
+                where('status', 'in', ['Verification Needed', 'Verified', 'Active']),
                 limit(100)
             );
         }

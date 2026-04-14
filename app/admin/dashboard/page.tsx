@@ -153,6 +153,18 @@ export default function AdminDashboardPage() {
         }
     };
 
+    const handleDeleteApproved = async (id: string) => {
+        if (window.confirm("Are you sure you want to completely delete this approved report? This action cannot be undone.")) {
+            try {
+                await deleteDoc(doc(db, 'issues', id));
+                setApprovedIssues(approvedIssues.filter(i => i.id !== id));
+            } catch (e) {
+                console.warn('Error deleting issue:', e);
+                alert("Failed to delete the issue. Make sure you have the required permissions.");
+            }
+        }
+    };
+
 
     // Extract unique cities for the approved issues filter
     const approvedCities = Array.from(new Set(approvedIssues.map(i => i.cityName || 'Unknown'))).filter(Boolean);
@@ -359,6 +371,9 @@ export default function AdminDashboardPage() {
                                                     <span className="flex items-center gap-0.5"><MapPin size={10} /> {issue.cityName || 'Any'}</span>
                                                     <span>•</span>
                                                     <span>{(issue.votes || 0)} Hypes</span>
+                                                    <button onClick={() => handleDeleteApproved(issue.id)} className="ml-auto text-red-500 hover:text-red-700 bg-red-50 px-2 py-0.5 rounded cursor-pointer transition-colors hover:bg-red-100 flex items-center justify-center">
+                                                        Delete
+                                                    </button>
                                                 </div>
                                             </div>
                                         ))}
@@ -476,8 +491,14 @@ export default function AdminDashboardPage() {
 
             {/* Rejection Modal */}
             {rejectingIssueId && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200">
+                <div 
+                    className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+                    onClick={() => { setRejectingIssueId(null); setRejectionRemark(''); }}
+                >
+                    <div 
+                        className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <button
                             onClick={() => { setRejectingIssueId(null); setRejectionRemark(''); }}
                             className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
