@@ -28,7 +28,7 @@ type DrawerSection = null | 'menu' | 'editProfile' | 'accountDetails' | 'feedbac
 type ActivitySubTab = 'hyped' | 'commented' | 'saved';
 
 export default function ProfilePage() {
-    const { user, userProfile, logout, isAdmin } = useAuth();
+    const { user, userProfile, logout, isAdmin, profileChecked } = useAuth();
     const router = useRouter();
 
     const [activeTab, setActiveTab] = useState<'reports' | 'activity'>('reports');
@@ -263,10 +263,11 @@ export default function ProfilePage() {
     };
 
     // ── Derived values ────────────────────────────────────────────────────────
-    const avatarUrl = photoPreview || user?.photoURL;
-    const displayName = user?.displayName || 'Citizen';
-    const rawHandle = userProfile?.handle || user?.email?.split('@')[0] || '';
-    const handle = rawHandle.startsWith('@') ? rawHandle : `@${rawHandle}`;
+    const avatarUrl = photoPreview || userProfile?.photoURL || user?.photoURL;
+    const displayName = userProfile?.displayName || user?.displayName || 'Citizen';
+    // Only derive handle from Firestore — never fall back to email (avoids showing wrong handle)
+    const rawHandle = profileChecked ? (userProfile?.handle || '') : '';
+    const handle = rawHandle.startsWith('@') ? rawHandle : (rawHandle ? `@${rawHandle}` : '—');
     const city = userProfile?.city || '';
 
     // Get current activity list
