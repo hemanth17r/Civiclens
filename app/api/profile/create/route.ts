@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, admin } from '@/lib/firebase-admin';
-import { getAuth } from 'firebase-admin/auth';
 
 // POST /api/profile/create
 // Creates a new user profile document via Admin SDK (bypasses App Check / Firestore client rules)
@@ -15,7 +14,7 @@ export async function POST(req: NextRequest) {
         const idToken = authHeader.substring(7);
         let decodedToken;
         try {
-            decodedToken = await getAuth().verifyIdToken(idToken);
+            decodedToken = await admin.auth().verifyIdToken(idToken);
         } catch {
             return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
         }
