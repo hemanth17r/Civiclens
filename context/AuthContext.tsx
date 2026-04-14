@@ -57,6 +57,7 @@ interface AuthContextType {
     user: User | null; // Firebase Auth User
     userProfile: UserProfile | null; // Firestore Profile
     loading: boolean;
+    profileChecked: boolean; // true once we've confirmed whether a Firestore doc exists or not
     isOfficial: boolean; // Computed: userProfile?.role === 'official' || isAdmin
     isAdmin: boolean;
     sendMagicLink: (email: string) => Promise<void>;
@@ -69,6 +70,7 @@ const AuthContext = createContext<AuthContextType>({
     user: null,
     userProfile: null,
     loading: true,
+    profileChecked: false,
     isOfficial: false,
     isAdmin: false,
     sendMagicLink: async () => { },
@@ -83,6 +85,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [profileChecked, setProfileChecked] = useState(false);
 
     useEffect(() => {
         // Handle Magic Link cross-device / same-device resolution
@@ -134,14 +137,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         await signOut(auth);
                         setUser(null);
                         setUserProfile(null);
+                        setProfileChecked(true);
                         setLoading(false);
                         alert("Your account has been suspended.");
                         return;
                     }
                     setUserProfile(profileData);
+                    setProfileChecked(true);
                     setLoading(false);
                 } else {
                     setUserProfile(null);
+                    setProfileChecked(true);
                     setLoading(false);
                 }
             }, (error) => {
@@ -150,6 +156,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     setTimeout(() => setupListener(retries - 1), 1000);
                 } else {
                     console.warn("Error fetching user profile:", error);
+                    // Don't mark profileChecked on error — prevents modal from falsely showing
                     setLoading(false);
                 }
             });
@@ -209,7 +216,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const isOfficial = userProfile?.role === 'official' || isAdmin;
 
     return (
-        <AuthContext.Provider value={{ user, userProfile, loading, isOfficial, isAdmin, sendMagicLink, loginWithGoogleCredential, loginWithGooglePopup, logout }}>
+        <AuthContext.Provider value={{ user, userProfile, loading, profileChecked, isOfficial, isAdmin, sendMagicLink, loginWithGoogleCredential, loginWithGooglePopup, logout }}>
             {children}
         </AuthContext.Provider>
     );

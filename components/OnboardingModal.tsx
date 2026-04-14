@@ -6,13 +6,17 @@ import { AtSign, Check, X, Loader2 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 
 export default function OnboardingModal() {
-    const { user, userProfile, loading } = useAuth();
+    const { user, userProfile, loading, profileChecked } = useAuth();
     const [handle, setHandle] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // If loading, or not logged in, or profile already has a handle → Don't show
-    if (loading || !user || userProfile?.handle) return null;
+    // Only show when:
+    // 1. Auth has fully resolved (not loading)
+    // 2. User is logged in
+    // 3. Firestore confirmed the document exists/doesn't exist (profileChecked)
+    // 4. The document either doesn't exist OR exists without a handle
+    if (loading || !user || !profileChecked || userProfile?.handle) return null;
 
     const validateHandle = (value: string): string | null => {
         if (!value) return 'Handle is required.';
