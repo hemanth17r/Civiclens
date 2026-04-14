@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { AtSign, Check, X, Loader2 } from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { doc, setDoc, getDocs, collection, query, where, limit, serverTimestamp } from 'firebase/firestore';
 
 export default function OnboardingModal() {
     const { user, userProfile, loading } = useAuth();
@@ -35,25 +37,44 @@ export default function OnboardingModal() {
         setError(null);
 
         try {
-            // Get a fresh ID token to authenticate the server-side request
-            const idToken = await user.getIdToken(/* forceRefresh */ true);
-
-            const response = await fetch('/api/profile/create', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`,
-                },
-                body: JSON.stringify({ handle }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                // Surface the specific error from the server
-                setError(data.error || 'Failed to save profile. Try again.');
+            const userRef = doc(db, 'users', user.uid);
+            const prefixedHandle = `@${handle}`;
+            
+            // Check handle uniqueness
+            const handleQuery = query(
+                collection(db, 'users'),
+                where('handle', '==', prefixedHandle),
+                limit(1)
+            );
+            const handleDoc = await getDocs(handleQuery);
+            if (!handleDoc.empty) {
+                setError('That handle is already taken. Try another.');
                 return;
             }
+
+            // Build profile
+            const profileData = {
+                uid: user.uid,
+                email: user.email || '',
+                displayName: user.displayName || 'Anonymous',
+                photoURL: user.photoURL || null,
+                handle: prefixedHandle,
+                role: 'citizen',
+                createdAt: serverTimestamp(),
+                trustScore: 0.3,
+                trustStats: { resolvedReports: 0, accurateVotes: 0, flaggedReports: 0, wrongVotes: 0 },
+                xp: 0,
+                level: 1,
+                levelTitle: 'Observer',
+                badges: [],
+                currentStreak: 0,
+                longestStreak: 0,
+                gamificationStats: { totalReports: 0, totalVerifications: 0, totalComments: 0, totalResolved: 0 },
+                followersCount: 0,
+                followingCount: 0,
+            };
+
+            await setDoc(userRef, profileData);
 
             // Success — AuthContext's onSnapshot listener will detect the
             // new document and hide this modal automatically.
