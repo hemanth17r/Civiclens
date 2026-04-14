@@ -99,6 +99,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     const { user } = useAuth();
     const [votingStageKey, setVotingStageKey] = useState<string | null>(null);
     const [showVerifiedInfo, setShowVerifiedInfo] = useState(false);
+    const verifiedInfoRef = useRef<HTMLDivElement>(null);
 
     const unwrappedParams = React.use(params);
     const issueId = unwrappedParams.id;
@@ -106,6 +107,20 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     const [issue, setIssue] = useState<Issue | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (verifiedInfoRef.current && !verifiedInfoRef.current.contains(event.target as Node)) {
+                setShowVerifiedInfo(false);
+            }
+        }
+        if (showVerifiedInfo) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showVerifiedInfo]);
 
     useEffect(() => {
         let cancelled = false;
@@ -321,7 +336,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                             <h3 className="font-bold text-gray-900 text-lg">Issue Lifecycle</h3>
                             <p className="text-xs text-gray-400 mt-0.5">Each issue moves through defined stages</p>
                         </div>
-                        <div className="relative">
+                        <div className="relative" ref={verifiedInfoRef}>
                             <button
                                 onClick={() => setShowVerifiedInfo(v => !v)}
                                 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full hover:bg-emerald-100 transition-colors cursor-pointer"

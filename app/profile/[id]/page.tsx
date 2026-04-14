@@ -361,8 +361,14 @@ export default function PublicProfilePage() {
 
             {/* Report Modal */}
             {showReportModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-                    <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                <div 
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm"
+                    onClick={() => setShowReportModal(false)}
+                >
+                    <div 
+                        className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="p-6 border-b border-gray-100">
                             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                                 <AlertTriangle className="text-red-500" />

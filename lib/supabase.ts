@@ -35,20 +35,10 @@ export const supabase = createClient(
 );
 
 /**
- * Temporarily sets the Supabase Auth session using a Firebase JWT.
- * This allows Supabase Storage RLS (Row Level Security) to enforce 'authenticated'
- * rules natively, even though Firebase handles our core authentication.
+ * Returns the Supabase client without attempting to set the session.
+ * We rely on public Storage RLS upload policies, as assigning a Firebase JWT
+ * will cause the Supabase API Gateway to reject the request with 401 Unauthorized.
  */
 export const getAuthenticatedSupabase = async (firebaseUser: any) => {
-    if (!firebaseUser) return supabase;
-    try {
-        const token = await firebaseUser.getIdToken();
-        await supabase.auth.setSession({
-            access_token: token,
-            refresh_token: ''
-        });
-    } catch (e) {
-        console.error('Failed to set Supabase session with Firebase token', e);
-    }
     return supabase;
 };
