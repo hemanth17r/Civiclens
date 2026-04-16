@@ -244,7 +244,7 @@ export default function PublicProfilePage() {
                         )}
                     </div>
 
-                    <p className="text-lg text-blue-600 font-medium">@{profile.handle || 'citizen'}</p>
+                    <p className="text-lg text-blue-600 font-medium">@{profile.handle?.replace(/^@/, '') || 'citizen'}</p>
 
                     {profile.role === 'official' && profile.department && (
                         <p className="text-sm text-gray-600 bg-gray-100 inline-block px-3 py-1 rounded-full">

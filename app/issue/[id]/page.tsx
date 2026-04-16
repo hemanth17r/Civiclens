@@ -342,7 +342,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
             <div className="px-5 -mt-8 relative z-10">
                 <div className="flex items-start justify-between gap-4 mb-2">
                     <h1 className="text-3xl font-bold text-gray-900 leading-tight">{issue.title}</h1>
-                    {isAdmin && (
+                    {(isAdmin || (user && user.uid === issue.userId)) && (
                         <button
                             onClick={() => setShowDeleteModal(true)}
                             className="bg-red-50 text-red-600 hover:bg-red-100 flex-shrink-0 px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5 mt-1"
