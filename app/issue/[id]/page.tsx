@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MapPin, Calendar, Edit2, ShieldAlert, AlertCircle, Info, Users, CheckCircle2, Eye, Wrench, Clock } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Edit2, ShieldAlert, AlertCircle, Info, Users, CheckCircle2, Eye, Wrench, Clock, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
 import StageVoteCard from '@/components/StageVoteCard';
 import { getIssueById, Issue, IssueStatusState, normalizeStatus, voteOnStatus, STATUS_DB_KEYS } from '@/lib/issues';
+import { deleteDoc, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 // ═══════════════════════════════════════════════════════════════════════
 // LIFECYCLE CONFIGURATION — 6-stage progression
@@ -96,7 +98,7 @@ function getStageIndex(status: string): number {
 
 export default function IssueDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
-    const { user } = useAuth();
+    const { user, isAdmin } = useAuth();
     const [votingStageKey, setVotingStageKey] = useState<string | null>(null);
     const [showVerifiedInfo, setShowVerifiedInfo] = useState(false);
     const verifiedInfoRef = useRef<HTMLDivElement>(null);
@@ -107,6 +109,10 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     const [issue, setIssue] = useState<Issue | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
+
+    // Delete Modal State
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -145,6 +151,20 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
 
         return () => { cancelled = true; };
     }, [issueId]);
+
+    const handleDeleteIssue = async () => {
+        setIsDeleting(true);
+        try {
+            await deleteDoc(doc(db, 'issues', issueId));
+            router.push('/');
+        } catch (error) {
+            console.error('Error deleting issue:', error);
+            alert('Failed to delete issue.');
+        } finally {
+            setIsDeleting(false);
+            setShowDeleteModal(false);
+        }
+    };
 
     const handleInlineVote = async (targetStageKey: string, voteType: 'yes' | 'no') => {
         if (!user || user.isAnonymous) {
@@ -242,6 +262,11 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     // Build timeline entries from available data
     const timelineEntries: { date: string; label: string; color: string }[] = [];
     const baseDate = issue.createdAt?.toDate ? issue.createdAt.toDate().getTime() : Date.now() - 86400000 * 7;
+    const maxDate = Date.now();
+
+    const getBoundedDate = (offsetDays: number) => {
+        return new Date(Math.min(maxDate, baseDate + 86400000 * offsetDays));
+    };
 
     timelineEntries.push({
         date: format(new Date(baseDate), 'MMM d'),
@@ -250,7 +275,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     });
 
     if (currentStageIdx >= 1) {
-        const d = issue.approvedAt?.toDate ? issue.approvedAt.toDate() : new Date(baseDate + 86400000 * 1);
+        const d = issue.approvedAt?.toDate ? issue.approvedAt.toDate() : getBoundedDate(1);
         timelineEntries.push({
             date: format(d, 'MMM d'),
             label: 'Verification started',
@@ -258,8 +283,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
         });
     }
     if (currentStageIdx >= 2) {
-        // Fallback or exact dates could be pulled from statusData historically, using sequential offsets for now
-        const d = new Date(baseDate + 86400000 * 2);
+        const d = getBoundedDate(2);
         timelineEntries.push({
             date: format(d, 'MMM d'),
             label: 'Verified by community',
@@ -267,7 +291,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
         });
     }
     if (currentStageIdx >= 3) {
-        const d = new Date(baseDate + 86400000 * 3);
+        const d = getBoundedDate(3);
         timelineEntries.push({
             date: format(d, 'MMM d'),
             label: 'Marked as active/ongoing',
@@ -275,7 +299,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
         });
     }
     if (currentStageIdx >= 4) {
-        const d = new Date(baseDate + 86400000 * 5);
+        const d = getBoundedDate(5);
         timelineEntries.push({
             date: format(d, 'MMM d'),
             label: 'Action activity detected',
@@ -283,7 +307,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
         });
     }
     if (currentStageIdx >= 5) {
-        const d = issue.resolvedAt?.toDate ? issue.resolvedAt.toDate() : new Date(baseDate + 86400000 * 7);
+        const d = issue.resolvedAt?.toDate ? issue.resolvedAt.toDate() : getBoundedDate(7);
         timelineEntries.push({
             date: format(d, 'MMM d'),
             label: 'Issue resolved',
@@ -316,7 +340,17 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
             </div>
 
             <div className="px-5 -mt-8 relative z-10">
-                <h1 className="text-3xl font-bold text-gray-900 leading-tight mb-2">{issue.title}</h1>
+                <div className="flex items-start justify-between gap-4 mb-2">
+                    <h1 className="text-3xl font-bold text-gray-900 leading-tight">{issue.title}</h1>
+                    {isAdmin && (
+                        <button
+                            onClick={() => setShowDeleteModal(true)}
+                            className="bg-red-50 text-red-600 hover:bg-red-100 flex-shrink-0 px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5 mt-1"
+                        >
+                            <Trash2 size={16} /> Delete
+                        </button>
+                    )}
+                </div>
                 <div className="flex items-center gap-4 text-gray-500 text-sm mb-6">
                     <span className="flex items-center gap-1">
                         <MapPin size={16} />
@@ -353,9 +387,6 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                                     </div>
                                     <p className="text-xs text-gray-600 leading-relaxed">
                                         This badge means the community has collectively confirmed this issue is real through trust-weighted voting. Each vote carries a weight based on the voter&apos;s trust score, and a net score above +2 advances the issue to the next stage.
-                                    </p>
-                                    <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                                        Tap again to close this info panel.
                                     </p>
                                 </div>
                             )}
@@ -519,7 +550,51 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                     </div>
                 )}
             </div>
-
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div 
+                        className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+                        onClick={() => !isDeleting && setShowDeleteModal(false)}
+                    />
+                    <div className="bg-white rounded-[1.5rem] w-full max-w-sm shadow-2xl relative z-10 overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                                <Trash2 size={28} className="text-red-500" />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900 mb-2">Delete this issue?</h3>
+                            <p className="text-gray-500 text-sm mb-8 leading-relaxed">
+                                Are you sure you want to delete this issue? This action cannot be undone and will permanently remove all related media and history.
+                            </p>
+                            <div className="flex flex-col gap-3">
+                                <button
+                                    onClick={handleDeleteIssue}
+                                    disabled={isDeleting}
+                                    className="w-full bg-red-500 hover:bg-red-600 active:bg-red-700 text-white rounded-xl py-3.5 font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center group"
+                                >
+                                    {isDeleting ? (
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            <span>Deleting...</span>
+                                        </div>
+                                    ) : (
+                                        <span className="flex items-center gap-2 group-hover:scale-105 transition-transform duration-200">
+                                            <Trash2 size={18} /> Yes, delete issue
+                                        </span>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => setShowDeleteModal(false)}
+                                    disabled={isDeleting}
+                                    className="w-full bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-gray-700 rounded-xl py-3.5 font-bold transition-colors disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

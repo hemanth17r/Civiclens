@@ -24,8 +24,8 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       // Only the user themselves can write to their own profile, but they CANNOT update sensitive fields.
       allow create: if isAuthenticated() && isOwner(userId);
-      allow update: if isAuthenticated() && isOwner(userId) && (
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+      allow update: if isAuthenticated() && (
+        (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           // Gamification fields (server-only via Admin SDK)
           'xp', 'level', 'levelTitle', 'badges', 'gamificationStats',
           'currentStreak', 'longestStreak', 'lastActiveDate',
@@ -34,10 +34,9 @@ service cloud.firestore {
           // Moderation fields (admin-only)
           'isBlocked',
           // Role fields (admin-only)
-          'role', 'department', 'jurisdiction',
-          // Counter fields (transaction-managed, not directly settable)
-          'followersCount', 'followingCount'
-        ])
+          'role', 'department', 'jurisdiction'
+        ])) ||
+        (!isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount']))
       );
       allow delete: if false; // Soft deletes preferred
 

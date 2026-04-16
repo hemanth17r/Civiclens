@@ -65,7 +65,7 @@ export default function CityInsightsPage() {
                     return (
                         <Link 
                             key={contributor.uid}
-                            href={`/profile/${contributor.handle || ''}`}
+                            href={`/profile/${contributor.uid}`}
                             className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors group cursor-pointer"
                         >
                             <div className="flex items-center gap-4">
