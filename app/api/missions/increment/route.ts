@@ -14,7 +14,7 @@ export async function POST(req: Request) {
 
         const authHeader = req.headers.get('Authorization');
         if (!authHeader?.startsWith('Bearer ')) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
         }
 
         const token = authHeader.split('Bearer ')[1];
@@ -105,6 +105,6 @@ export async function POST(req: Request) {
         return NextResponse.json({ missionCompleted: false });
     } catch (error: any) {
         console.error('Failed to increment mission progress (API):', error);
-        return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }

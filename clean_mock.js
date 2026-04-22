@@ -19,13 +19,17 @@ try {
     saKey = JSON.parse(evaled);
   } else {
     saKey = evaled;
-  }
-} catch (e) {
-  if (saKeyStr.startsWith("'") || saKeyStr.startsWith('"')) {
-     saKeyStr = saKeyStr.substring(1, saKeyStr.length - 1);
-  }
-  saKeyStr = saKeyStr.replace(/\\n/g, '\\n');
   saKey = JSON.parse(saKeyStr);
+} catch (e) {
+  const keyStr = saKeyStr
+    .replace(/\\n/g, '\n')
+    .trim();
+    
+  const cleanKeyStr = (keyStr.startsWith("'") && keyStr.endsWith("'")) 
+    ? keyStr.slice(1, -1) 
+    : keyStr;
+
+  saKey = JSON.parse(cleanKeyStr);
 }
 
 if (saKey.private_key) {

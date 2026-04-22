@@ -30,6 +30,6 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: true, message: 'Gamification reset to 0' });
     } catch (e: any) {
         console.error('Error resetting gamification limit:', e);
-        return NextResponse.json({ error: e.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }
