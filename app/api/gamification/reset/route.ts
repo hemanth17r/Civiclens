@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { adminDb, adminAuth } from '@/lib/firebase-admin';
+import { db, admin } from '@/lib/firebase-admin';
 
 export async function POST(req: Request) {
     try {
@@ -9,11 +9,11 @@ export async function POST(req: Request) {
         }
 
         const token = authHeader.split('Bearer ')[1];
-        const decodedToken = await adminAuth.verifyIdToken(token);
+        const decodedToken = await admin.auth().verifyIdToken(token);
         const uid = decodedToken.uid;
 
         // Reset the user's gamification stats in Firestore back to 0
-        const userRef = adminDb.collection('users').doc(uid);
+        const userRef = db.collection('users').doc(uid);
         await userRef.update({
             xp: 0,
             level: 1,
