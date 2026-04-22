@@ -40,7 +40,7 @@ export async function POST(request: Request) {
             .get();
 
         const fcmTokens: string[] = [];
-        adminsSnapshot.forEach(doc => {
+        adminsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const data = doc.data();
             if (data.fcmTokens && Array.isArray(data.fcmTokens)) {
                 fcmTokens.push(...data.fcmTokens);
