@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MapPin, Calendar, Edit2, ShieldAlert, AlertCircle, Info, Users, CheckCircle2, Eye, Wrench, Clock, Trash2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Edit2, ShieldAlert, AlertCircle, Info, Users, CheckCircle2, Eye, Wrench, Clock, Trash2, Pencil } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
@@ -40,7 +40,7 @@ const LIFECYCLE_STAGES: LifecycleStage[] = [
     {
         key: 'Verification Needed',
         label: 'Verification Needed',
-        description: 'Waiting for community confirmation',
+        description: 'Community votes to confirm this is real',
         icon: <Users size={16} />,
         color: '#7C3AED',
         bgColor: '#F5F3FF',
@@ -48,19 +48,9 @@ const LIFECYCLE_STAGES: LifecycleStage[] = [
         canVote: true,
     },
     {
-        key: 'Verified',
-        label: 'Verified',
-        description: 'Trust-weighted votes confirmed this issue',
-        icon: <CheckCircle2 size={16} />,
-        color: '#0D9488',
-        bgColor: '#F0FDFA',
-        borderColor: '#14B8A6',
-        canVote: false,
-    },
-    {
         key: 'Active',
         label: 'Active',
-        description: 'Issue is awaiting action',
+        description: 'Verified issue — awaiting action',
         icon: <Eye size={16} />,
         color: '#2563EB',
         bgColor: '#EFF6FF',
@@ -70,7 +60,7 @@ const LIFECYCLE_STAGES: LifecycleStage[] = [
     {
         key: 'Action Seen',
         label: 'Action Seen',
-        description: 'Work activity has been detected',
+        description: 'Community confirms work has started',
         icon: <Wrench size={16} />,
         color: '#D97706',
         bgColor: '#FFFBEB',
@@ -80,7 +70,7 @@ const LIFECYCLE_STAGES: LifecycleStage[] = [
     {
         key: 'Resolved',
         label: 'Resolved',
-        description: 'Issue has been fixed and confirmed',
+        description: 'Community confirms the issue is fully fixed',
         icon: <CheckCircle2 size={16} />,
         color: '#059669',
         bgColor: '#ECFDF5',
@@ -100,6 +90,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     const router = useRouter();
     const { user, isAdmin } = useAuth();
     const [votingStageKey, setVotingStageKey] = useState<string | null>(null);
+    const [quickVoteOpen, setQuickVoteOpen] = useState<string | null>(null); // tracks which quick-vote card is expanded
     const [showVerifiedInfo, setShowVerifiedInfo] = useState(false);
     const verifiedInfoRef = useRef<HTMLDivElement>(null);
 
@@ -232,16 +223,24 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
         );
     }
 
-    // ── Error / Not Found ────────────────────────────────────────────────────
-    if (error || !issue) {
+    // ── Error / Not Found / Access Denied ─────────────────────────────────────
+    const isPendingApproval = issue?.status === 'Reported';
+    const hasAccessToPending = isAdmin || (user && issue && user.uid === issue.userId);
+    const accessDenied = isPendingApproval && !hasAccessToPending;
+
+    if (error || !issue || accessDenied) {
         return (
             <div className="bg-white min-h-screen flex flex-col items-center justify-center px-6">
                 <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4">
                     <AlertCircle size={32} className="text-red-400" />
                 </div>
-                <h1 className="text-xl font-bold text-gray-900 mb-1">Issue not found</h1>
+                <h1 className="text-xl font-bold text-gray-900 mb-1">
+                    {accessDenied ? "Pending Approval" : "Issue not found"}
+                </h1>
                 <p className="text-gray-500 text-sm mb-6 text-center">
-                    This issue may have been removed or doesn't exist.
+                    {accessDenied 
+                        ? "This issue is currently under review by administrators and is not yet publicly visible."
+                        : "This issue may have been removed or doesn't exist."}
                 </p>
                 <button
                     onClick={() => router.push('/')}
@@ -283,35 +282,27 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
         });
     }
     if (currentStageIdx >= 2) {
-        const d = getBoundedDate(2);
+        const d = getBoundedDate(3);
         timelineEntries.push({
             date: format(d, 'MMM d'),
-            label: 'Verified by community',
+            label: 'Verified & marked active',
             color: LIFECYCLE_STAGES[2].color,
         });
     }
     if (currentStageIdx >= 3) {
-        const d = getBoundedDate(3);
-        timelineEntries.push({
-            date: format(d, 'MMM d'),
-            label: 'Marked as active/ongoing',
-            color: LIFECYCLE_STAGES[3].color,
-        });
-    }
-    if (currentStageIdx >= 4) {
         const d = getBoundedDate(5);
         timelineEntries.push({
             date: format(d, 'MMM d'),
             label: 'Action activity detected',
-            color: LIFECYCLE_STAGES[4].color,
+            color: LIFECYCLE_STAGES[3].color,
         });
     }
-    if (currentStageIdx >= 5) {
+    if (currentStageIdx >= 4) {
         const d = issue.resolvedAt?.toDate ? issue.resolvedAt.toDate() : getBoundedDate(7);
         timelineEntries.push({
             date: format(d, 'MMM d'),
             label: 'Issue resolved',
-            color: LIFECYCLE_STAGES[5].color,
+            color: LIFECYCLE_STAGES[4].color,
         });
     }
 
@@ -373,20 +364,24 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                         <div className="relative" ref={verifiedInfoRef}>
                             <button
                                 onClick={() => setShowVerifiedInfo(v => !v)}
-                                className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full hover:bg-emerald-100 transition-colors cursor-pointer"
+                                className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full hover:opacity-90 transition-colors cursor-pointer"
+                                style={{
+                                    backgroundColor: currentStageIdx >= 2 ? '#ECFDF5' : LIFECYCLE_STAGES[currentStageIdx]?.bgColor || '#F3F4F6',
+                                    color: currentStageIdx >= 2 ? '#059669' : LIFECYCLE_STAGES[currentStageIdx]?.color || '#374151',
+                                }}
                                 aria-expanded={showVerifiedInfo}
-                                aria-label="Learn about Community Verified status"
+                                aria-label="Learn about issue lifecycle status"
                             >
-                                <ShieldAlert size={14} className="mb-0.5" /> Community Verified
+                                <ShieldAlert size={14} className="mb-0.5" /> {currentStageIdx >= 2 ? 'Community Verified' : LIFECYCLE_STAGES[currentStageIdx]?.label || 'Reported'}
                             </button>
                             {showVerifiedInfo && (
-                                <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-emerald-100 rounded-2xl shadow-xl p-4 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
+                                <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-2xl shadow-xl p-4 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
                                     <div className="flex items-center gap-2 mb-2">
                                         <ShieldAlert size={14} className="text-emerald-600 flex-shrink-0" />
-                                        <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Community Verified</span>
+                                        <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">Issue Lifecycle</span>
                                     </div>
                                     <p className="text-xs text-gray-600 leading-relaxed">
-                                        This badge means the community has collectively confirmed this issue is real through trust-weighted voting. Each vote carries a weight based on the voter&apos;s trust score, and a net score above +2 advances the issue to the next stage.
+                                        Issues move through community-driven stages. At each stage, citizens vote to confirm or reject the current status. A net trust-weighted score above +2 advances the issue to the next stage. This ensures transparent, collective decision-making.
                                     </p>
                                 </div>
                             )}
@@ -400,6 +395,21 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                             const isCurrent = idx === currentStageIdx;
                             const isNext = idx === currentStageIdx + 1;
                             const isLast = idx === LIFECYCLE_STAGES.length - 1;
+
+                            // Quick-vote icon: only on future stages (Active idx=2, Action Seen idx=3, Resolved idx=4)
+                            // Never on Reported (0) or Verification Needed (1)
+                            const showQuickVoteIcon = idx >= 2 && idx > currentStageIdx;
+                            const isQuickVoteExpanded = quickVoteOpen === stage.key;
+
+                            // Quick-vote questions confirm the issue IS at that stage already
+                            const getQuickVotePrompt = (key: string) => {
+                                switch (key) {
+                                    case 'Active': return 'Is this issue verified and active?';
+                                    case 'Action Seen': return 'Has action already been taken?';
+                                    case 'Resolved': return 'Is this issue already resolved?';
+                                    default: return 'Update status?';
+                                }
+                            };
 
                             return (
                                 <div key={stage.key} className="relative">
@@ -418,7 +428,8 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                                         className={clsx(
                                             "flex items-start gap-4 py-3 px-3 rounded-2xl transition-all",
                                             isCurrent && "bg-white shadow-sm border",
-                                            !isDone && !isNext && "opacity-50",
+                                            isQuickVoteExpanded && !isCurrent && "bg-white/60 shadow-sm border border-gray-100",
+                                            !isDone && !isNext && !isQuickVoteExpanded && "opacity-50",
                                         )}
                                         style={isCurrent ? { borderColor: stage.borderColor + '40' } : undefined}
                                     >
@@ -459,6 +470,22 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                                                         Current
                                                     </span>
                                                 )}
+                                                {/* Quick-vote edit icon — right-aligned */}
+                                                {showQuickVoteIcon && (
+                                                    <button
+                                                        onClick={() => setQuickVoteOpen(prev => prev === stage.key ? null : stage.key)}
+                                                        className={clsx(
+                                                            "ml-auto p-1.5 rounded-lg transition-all",
+                                                            isQuickVoteExpanded
+                                                                ? "bg-gray-200 text-gray-700"
+                                                                : "text-gray-300 hover:text-gray-500 hover:bg-gray-100"
+                                                        )}
+                                                        title={`Quick vote: ${stage.label}`}
+                                                        aria-label={`Quick vote to mark as ${stage.label}`}
+                                                    >
+                                                        <Pencil size={14} />
+                                                    </button>
+                                                )}
                                             </div>
                                             <p className={clsx(
                                                 "text-xs mt-0.5",
@@ -471,6 +498,19 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                                             {isCurrent && stage.canVote && (
                                                 <StageVoteCard 
                                                     stage={stage}
+                                                    yesWeight={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.yesWeight || 0}
+                                                    noWeight={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.noWeight || 0}
+                                                    score={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.score || 0}
+                                                    isVoting={votingStageKey === stage.key}
+                                                    onVote={(type) => handleInlineVote(stage.key, type)}
+                                                />
+                                            )}
+
+                                            {/* Quick-vote card (expanded when pencil icon is clicked on a future stage) */}
+                                            {isQuickVoteExpanded && !isCurrent && (
+                                                <StageVoteCard
+                                                    stage={{ ...stage, key: stage.key }}
+                                                    prompt={getQuickVotePrompt(stage.key)}
                                                     yesWeight={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.yesWeight || 0}
                                                     noWeight={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.noWeight || 0}
                                                     score={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.score || 0}

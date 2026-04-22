@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { MapPin, Flame, MessageCircle, Bookmark, User, Share2, BookmarkCheck, CheckCircle } from 'lucide-react';
+import { MapPin, Flame, MessageCircle, Bookmark, User, Share2, BookmarkCheck, CheckCircle, Info } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { clsx } from 'clsx';
 import { Issue, hypeIssue, unhypeIssue, hasUserHyped, saveIssue, unsaveIssue, hasUserSaved } from '@/lib/issues';
@@ -36,6 +36,8 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
     const [isSaved, setIsSaved] = useState(false);
     const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
     const mediaContainerRef = React.useRef<HTMLDivElement>(null);
+    const [showPendingInfo, setShowPendingInfo] = useState(false);
+    const pendingInfoRef = React.useRef<HTMLDivElement>(null);
 
     const mediaList = issue.mediaUrls && issue.mediaUrls.length > 0
         ? issue.mediaUrls
@@ -53,6 +55,19 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
             }
         }
     };
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (pendingInfoRef.current && !pendingInfoRef.current.contains(event.target as Node)) {
+                setShowPendingInfo(false);
+            }
+        };
+        if (showPendingInfo) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showPendingInfo]);
+
 
 
     // Load hype/save state from Firestore on mount
@@ -82,8 +97,8 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
             case 'Resolved': return 'bg-[#34A853] text-white';
             case 'Action Seen':
             case 'In Progress': return 'bg-[#FBBC05] text-white';
-            case 'Active': return 'bg-blue-600 text-white';
-            case 'Verified': return 'bg-teal-500 text-white';
+            case 'Active':
+            case 'Verified': return 'bg-blue-600 text-white'; // Verified is legacy, treated as Active
             case 'Verification Needed':
             case 'Under Review': return 'bg-purple-600 text-white';
             case 'Reported':
@@ -268,7 +283,29 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                 <HeartAnimation isVisible={showHeartAnim} />
 
                 {/* Status Pill — shows current status, links to timeline */}
-                <div className="absolute top-4 right-4 z-10">
+                <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+                    {/* Pending Approval Badge */}
+                    {issue.status === 'Reported' && (
+                        <div className="relative" ref={pendingInfoRef}>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setShowPendingInfo(v => !v); }}
+                                className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md backdrop-blur-md transition-all active:scale-95 border border-white/20 flex items-center gap-1 cursor-pointer bg-amber-500 text-white hover:opacity-90"
+                            >
+                                <Info size={12} /> Pending Approval
+                            </button>
+                            {showPendingInfo && (
+                                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-100 rounded-2xl shadow-xl p-4 z-20 animate-in fade-in slide-in-from-top-2 duration-200 cursor-default" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Info size={14} className="text-amber-500 flex-shrink-0" />
+                                        <span className="text-xs font-bold text-gray-900 uppercase tracking-wider">Needs Admin Approval</span>
+                                    </div>
+                                    <p className="text-xs text-gray-600 leading-relaxed normal-case">
+                                        This report requires admin verification before it can be displayed in the public feed where others can view and hype it. It is currently only visible to you.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <button
                         onClick={handleStatusClick}
                         className={clsx(

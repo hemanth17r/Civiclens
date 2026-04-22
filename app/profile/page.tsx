@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
@@ -66,6 +66,12 @@ export default function ProfilePage() {
     // Feedback
     const [feedbackMsg, setFeedbackMsg] = useState('');
     const [submittingFeedback, setSubmittingFeedback] = useState(false);
+    const [toast, setToast] = useState<{ title: string, type: 'success' | 'error' } | null>(null);
+
+    const showToast = (title: string, type: 'success' | 'error' = 'success') => {
+        setToast({ title, type });
+        setTimeout(() => setToast(null), 3000);
+    };
 
     // Gamification
     const [gamification, setGamification] = useState<{
@@ -249,14 +255,15 @@ export default function ProfilePage() {
                 message: feedbackMsg.trim(),
                 userEmail: user?.email || 'Anonymous',
                 userId: user?.uid || 'Unknown',
+                status: 'pending',
                 createdAt: serverTimestamp()
             });
             setFeedbackMsg('');
             setDrawer(null);
-            alert('Feedback submitted successfully!');
+            showToast('Feedback submitted successfully!');
         } catch (e) {
             console.error(e);
-            alert('Failed to submit feedback.');
+            showToast('Failed to submit feedback.', 'error');
         } finally {
             setSubmittingFeedback(false);
         }
@@ -881,6 +888,21 @@ export default function ProfilePage() {
                 type={connectionsModalType || 'followers'}
                 userId={user.uid}
             />
+
+            <AnimatePresence>
+                {toast && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 50 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 50 }}
+                        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-4 py-3 rounded-full shadow-lg border text-sm font-semibold flex items-center justify-center gap-2 ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-red-50 text-red-800 border-red-200'}`}
+                    >
+                        {toast.type === 'success' ? <Check size={18} className="text-emerald-500" /> : <X size={18} className="text-red-500" />}
+                        {toast.title}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
+ 

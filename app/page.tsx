@@ -147,7 +147,7 @@ export default function Home() {
         }
         setRefreshing(true);
         try {
-            const data = await getFeedIssues(cityName);
+            const data = await getFeedIssues(cityName, user?.uid);
             setIssues(data);
         } catch (e) {
             console.error('Feed fetch error:', e);

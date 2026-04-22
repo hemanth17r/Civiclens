@@ -1,5 +1,5 @@
 import { db } from "./firebase";
-import { collection, addDoc, serverTimestamp, doc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, doc, updateDoc } from "firebase/firestore";
 
 export const reportUser = async (
     reportedUid: string,
@@ -25,7 +25,7 @@ export const reportUser = async (
 export const warnUser = async (userId: string, warningMessage: string): Promise<void> => {
     try {
         await addDoc(collection(db, 'notifications'), {
-            userId: userId,
+            targetUid: userId,
             title: "OFFICIAL WARNING",
             body: warningMessage,
             type: "urgent_sla", // Reuse urgent styling for maximum visibility
@@ -42,11 +42,18 @@ export const blockUser = async (userId: string): Promise<void> => {
     try {
         const userRef = doc(db, 'users', userId);
         // We will need to update the user doc to set isBlocked: true
-        await import("firebase/firestore").then(({ updateDoc }) =>
-            updateDoc(userRef, { isBlocked: true })
-        );
+        await updateDoc(userRef, { isBlocked: true });
     } catch (e) {
         console.error("Error blocking user:", e);
+        throw e;
+    }
+};
+export const unblockUser = async (userId: string): Promise<void> => {
+    try {
+        const userRef = doc(db, 'users', userId);
+        await updateDoc(userRef, { isBlocked: false });
+    } catch (e) {
+        console.error("Error unblocking user:", e);
         throw e;
     }
 };

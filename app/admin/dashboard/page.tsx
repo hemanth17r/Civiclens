@@ -5,10 +5,11 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, orderBy, limit, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { ShieldCheck, CheckCircle, XCircle, MessageSquare, Loader2, AlertTriangle, LayoutDashboard, Flag, Zap, ArrowLeft, Filter, MapPin } from 'lucide-react';
+import { ShieldCheck, CheckCircle, XCircle, MessageSquare, Loader2, AlertTriangle, LayoutDashboard, Flag, Zap, ArrowLeft, Filter, MapPin, Unlock } from 'lucide-react';
 import { Issue } from '@/lib/issues';
 import { notifyCitizenIssueApproved, notifyCitizenIssueRejected } from '@/lib/notifications';
-import { warnUser, blockUser } from '@/lib/moderation';
+import { warnUser, blockUser, unblockUser } from '@/lib/moderation';
+import UserReportCard from '@/components/admin/UserReportCard';
 
 export default function AdminDashboardPage() {
     const { user, isAdmin, loading } = useAuth();
@@ -16,11 +17,24 @@ export default function AdminDashboardPage() {
     const [issues, setIssues] = useState<Issue[]>([]);
     const [approvedIssues, setApprovedIssues] = useState<Issue[]>([]);
     const [feedbacks, setFeedbacks] = useState<any[]>([]);
+    const [resolvedFeedbacks, setResolvedFeedbacks] = useState<any[]>([]);
     const [userReports, setUserReports] = useState<any[]>([]);
+    const [resolvedUserReports, setResolvedUserReports] = useState<any[]>([]);
     const [fetching, setFetching] = useState(true);
 
     // Google Docs style active card view
     const [activeModule, setActiveModule] = useState<'home' | 'issues' | 'feedback' | 'reports'>('home');
+    const [activeReportsTab, setActiveReportsTab] = useState<'home' | 'pending' | 'warned' | 'blocked' | 'dismissed'>('home');
+
+    // Custom confirm/prompt state
+    const [confirmAction, setConfirmAction] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        isPrompt?: boolean;
+        promptPlaceholder?: string;
+        onConfirm: (val?: string) => void;
+    } | null>(null);
 
     // Sort modules by usage
     const [recentModules, setRecentModules] = useState<string[]>(['issues', 'reports', 'feedback']);
@@ -30,19 +44,51 @@ export default function AdminDashboardPage() {
     const [rejectingIssueId, setRejectingIssueId] = useState<string | null>(null);
     const [rejectionRemark, setRejectionRemark] = useState('');
 
+    // Toast state
+    const [toast, setToast] = useState<{ title: string, type: 'success' | 'error' | 'info' } | null>(null);
+
+    const showToast = (title: string, type: 'success' | 'error' | 'info' = 'success') => {
+        setToast({ title, type });
+        setTimeout(() => setToast(null), 3000);
+    };
+
     useEffect(() => {
         if (!loading && !isAdmin) {
             router.replace('/');
         }
     }, [isAdmin, loading, router]);
 
-    // Load recent modules from local storage for usage-based sorting
     useEffect(() => {
-        // Module order is now fixed
+        const handleHashChange = () => {
+            const hash = window.location.hash.replace('#', '');
+            if (!hash || hash === 'home') {
+                setActiveModule('home');
+                setActiveReportsTab('home');
+            } else if (hash === 'issues' || hash === 'feedback' || hash === 'reports') {
+                setActiveModule(hash as any);
+                setActiveReportsTab('home');
+            } else if (hash.startsWith('reports-')) {
+                setActiveModule('reports');
+                setActiveReportsTab(hash.split('-')[1] as any);
+            }
+        };
+
+        window.addEventListener('hashchange', handleHashChange);
+        handleHashChange(); // sync on mount
+
+        return () => window.removeEventListener('hashchange', handleHashChange);
     }, []);
 
     const openModule = (modId: string) => {
-        setActiveModule(modId as any);
+        window.location.hash = modId;
+    };
+
+    const goHome = () => {
+        window.location.hash = 'home';
+    };
+
+    const openReportsTab = (tabId: string) => {
+        window.location.hash = `reports-${tabId}`;
     };
 
     const fetchData = async () => {
@@ -68,7 +114,7 @@ export default function AdminDashboardPage() {
             // Fetch Approved Issues
             const approvedQuery = query(
                 collection(db, 'issues'),
-                where('status', 'in', ['Verification Needed', 'Verified', 'Active', 'Action Seen', 'Resolved']),
+                where('status', 'in', ['Verification Needed', 'Active', 'Action Seen', 'Resolved']),
                 limit(100)
             );
             const approvedSnap = await getDocs(approvedQuery);
@@ -83,15 +129,37 @@ export default function AdminDashboardPage() {
             // Fetch Feedbacks
             const feedbackQuery = query(collection(db, 'feedbacks'));
             const feedbackSnap = await getDocs(feedbackQuery);
-            setFeedbacks(feedbackSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            const allFeedbacks = feedbackSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+            
+            allFeedbacks.sort((a: any, b: any) => {
+                const tA = a.createdAt?.toMillis?.() || (typeof a.createdAt === 'number' ? a.createdAt : 0);
+                const tB = b.createdAt?.toMillis?.() || (typeof b.createdAt === 'number' ? b.createdAt : 0);
+                return tB - tA; // Newest first
+            });
+
+            setFeedbacks(allFeedbacks.filter((f: any) => f.status === 'pending' || !f.status));
+            setResolvedFeedbacks(allFeedbacks.filter((f: any) => f.status === 'resolved'));
 
             // Fetch User Reports
-            const reportsQuery = query(
-                collection(db, 'user_reports'),
-                where('status', '==', 'pending')
-            );
+            const reportsQuery = query(collection(db, 'user_reports'));
             const reportsSnap = await getDocs(reportsQuery);
-            setUserReports(reportsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            const allReports = reportsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+
+            const pendingReports = allReports.filter((r: any) => r.status === 'pending' || !r.status);
+            pendingReports.sort((a: any, b: any) => {
+                const tA = a.createdAt?.toMillis?.() || (typeof a.createdAt === 'number' ? a.createdAt : 0);
+                const tB = b.createdAt?.toMillis?.() || (typeof b.createdAt === 'number' ? b.createdAt : 0);
+                return tA - tB; // oldest pending first
+            });
+            setUserReports(pendingReports);
+
+            const resolvedReps = allReports.filter((r: any) => r.status && r.status !== 'pending');
+            resolvedReps.sort((a: any, b: any) => {
+                const tA = a.createdAt?.toMillis?.() || (typeof a.createdAt === 'number' ? a.createdAt : 0);
+                const tB = b.createdAt?.toMillis?.() || (typeof b.createdAt === 'number' ? b.createdAt : 0);
+                return tB - tA; // Newest acted upon first
+            });
+            setResolvedUserReports(resolvedReps);
         } catch (e) {
             console.warn('Error fetching admin data', e);
         } finally {
@@ -122,15 +190,131 @@ export default function AdminDashboardPage() {
             if (targetUid) {
                 await notifyCitizenIssueApproved(id, title, targetUid);
             }
+            showToast('Issue approved and moved to active feed');
         } catch (e) {
-            console.warn('Error approving issue:', e);
+            console.error('Error approving issue:', e);
+            showToast('Failed to approve issue', 'error');
         }
+    };
+
+    const handleResolveFeedback = async (fb: any) => {
+        try {
+            console.log("Attempting to resolve feedback:", fb.id);
+            const fbRef = doc(db, 'feedbacks', fb.id);
+            await updateDoc(fbRef, { 
+                status: 'resolved',
+                resolvedAt: serverTimestamp() 
+            });
+            
+            setFeedbacks(prev => prev.filter(f => f.id !== fb.id));
+            setResolvedFeedbacks(prev => [{ ...fb, status: 'resolved', resolvedAt: new Date() }, ...prev]);
+            
+            showToast('Feedback marked as resolved');
+            console.log("Feedback resolution successful");
+        } catch (error: any) {
+            console.error("Error updating feedback:", error);
+            showToast(`Error: ${error.message}`, 'error');
+        }
+    };
+
+    const handleDismissReport = (report: any) => {
+        setConfirmAction({
+            isOpen: true,
+            title: 'Dismiss Report',
+            message: 'Dismiss this report without taking action against the target?',
+            onConfirm: async () => {
+                try {
+                    await updateDoc(doc(db, 'user_reports', report.id), { 
+                        status: 'dismissed',
+                        resolvedAt: serverTimestamp()
+                    });
+                    setUserReports(prev => prev.filter(r => r.id !== report.id));
+                    setResolvedUserReports(prev => [{ ...report, status: 'dismissed' }, ...prev]);
+                    showToast('Report dismissed');
+                } catch(e: any) {
+                    console.error('Error dismissing report:', e);
+                    showToast(`Failed: ${e.message}`, 'error');
+                }
+            }
+        });
+    };
+
+    const handleWarnUser = (report: any) => {
+        setConfirmAction({
+            isOpen: true,
+            title: 'Warn User',
+            message: 'Enter warning message to send directly to this user:',
+            isPrompt: true,
+            promptPlaceholder: 'Your warning message...',
+            onConfirm: async (msg) => {
+                if (!msg) return;
+                try {
+                    await warnUser(report.reportedUid, msg);
+                    await updateDoc(doc(db, 'user_reports', report.id), { 
+                        status: 'warned',
+                        resolvedAt: serverTimestamp() 
+                    });
+                    setUserReports(prev => prev.filter(r => r.id !== report.id));
+                    setResolvedUserReports(prev => [{ ...report, status: 'warned', resolvedAt: new Date() }, ...prev]);
+                    showToast('Warning sent to user');
+                } catch(e: any) {
+                    console.error('Error sending warning:', e);
+                    showToast(`Failed: ${e.message}`, 'error');
+                }
+            }
+        });
+    };
+
+    const handleBlockUser = (report: any) => {
+        setConfirmAction({
+            isOpen: true,
+            title: 'Block User',
+            message: 'Are you SURE you want to block this user completely? This will prevent them from accessing most features.',
+            onConfirm: async () => {
+                try {
+                    await blockUser(report.reportedUid);
+                    await updateDoc(doc(db, 'user_reports', report.id), { 
+                        status: 'blocked',
+                        resolvedAt: serverTimestamp()
+                    });
+                    setUserReports(prev => prev.filter(r => r.id !== report.id));
+                    setResolvedUserReports(prev => [{ ...report, status: 'blocked', resolvedAt: new Date() }, ...prev]);
+                    showToast('User has been blocked', 'error');
+                } catch(e: any) {
+                    console.error('Error blocking user:', e);
+                    showToast(`Failed: ${e.message}`, 'error');
+                }
+            }
+        });
+    };
+
+    const handleUnblockUser = (report: any) => {
+        setConfirmAction({
+            isOpen: true,
+            title: 'Restore User Access',
+            message: 'Are you SURE you want to unblock this user? This will restore their privileges.',
+            onConfirm: async () => {
+                try {
+                    await unblockUser(report.reportedUid);
+                    const ref = doc(db, 'user_reports', report.id);
+                    await updateDoc(ref, { 
+                        status: 'dismissed', // Mark as dismissed so they show in the dismissed pile
+                        resolvedAt: serverTimestamp()
+                    });
+                    setResolvedUserReports(prev => prev.map(r => r.id === report.id ? { ...r, status: 'dismissed', resolvedAt: new Date() } : r));
+                    showToast('User has been unblocked');
+                } catch(e: any) {
+                    console.error('Error unblocking user:', e);
+                    showToast(`Failed: ${e.message}`, 'error');
+                }
+            }
+        });
     };
 
     const confirmReject = async () => {
         if (!rejectingIssueId) return;
         if (!rejectionRemark.trim()) {
-            alert('Please provide a reason for rejection.');
+            showToast('Please provide a reason for rejection.', 'error');
             return;
         }
 
@@ -147,22 +331,29 @@ export default function AdminDashboardPage() {
 
             setRejectingIssueId(null);
             setRejectionRemark('');
-            alert('Issue rejected and user notified.');
+            showToast('Issue rejected and user notified', 'info');
         } catch (e) {
-            console.warn('Error rejecting issue:', e);
+            console.error('Error rejecting issue:', e);
+            showToast('Failed to reject issue', 'error');
         }
     };
 
-    const handleDeleteApproved = async (id: string) => {
-        if (window.confirm("Are you sure you want to completely delete this approved report? This action cannot be undone.")) {
-            try {
-                await deleteDoc(doc(db, 'issues', id));
-                setApprovedIssues(approvedIssues.filter(i => i.id !== id));
-            } catch (e) {
-                console.warn('Error deleting issue:', e);
-                alert("Failed to delete the issue. Make sure you have the required permissions.");
+    const handleDeleteApproved = (id: string) => {
+        setConfirmAction({
+            isOpen: true,
+            title: 'Delete Approved Report',
+            message: 'Are you sure you want to completely delete this approved report? This action cannot be undone.',
+            onConfirm: async () => {
+                try {
+                    await deleteDoc(doc(db, 'issues', id));
+                    setApprovedIssues(approvedIssues.filter(i => i.id !== id));
+                    showToast('Report permanently deleted');
+                } catch (e) {
+                    console.error('Error deleting issue:', e);
+                    showToast('Failed to delete report', 'error');
+                }
             }
-        }
+        });
     };
 
 
@@ -249,7 +440,7 @@ export default function AdminDashboardPage() {
                     ) : (
                         <div className="flex items-center gap-4">
                             <button
-                                onClick={() => setActiveModule('home')}
+                                onClick={goHome}
                                 className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors flex items-center justify-center"
                             >
                                 <ArrowLeft size={20} />
@@ -387,104 +578,196 @@ export default function AdminDashboardPage() {
 
                 {/* --- FEEDBACK LIST --- */}
                 {activeModule === 'feedback' && (
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in max-w-3xl mx-auto">
-                        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2 bg-blue-50">
-                            <MessageSquare size={18} className="text-blue-500" />
-                            <h2 className="font-bold text-gray-900">User Feedback Log</h2>
-                            <span className="ml-auto bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-0.5 rounded-full">{feedbacks.length}</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start h-[calc(100vh-200px)]">
+                        {/* PENDING FEEDBACK COLUMN */}
+                        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col h-full overflow-hidden">
+                            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-blue-50">
+                                <div className="flex items-center gap-2">
+                                    <MessageSquare size={18} className="text-blue-500" />
+                                    <h2 className="font-bold text-gray-900">Pending Feedback</h2>
+                                </div>
+                                <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-0.5 rounded-full">{feedbacks.length}</span>
+                            </div>
+
+                            <div className="overflow-y-auto flex-1 p-4 bg-slate-50/50">
+                                {fetching ? (
+                                    <div className="flex justify-center mt-10"><Loader2 className="animate-spin text-gray-400" size={24} /></div>
+                                ) : feedbacks.length === 0 ? (
+                                    <div className="text-center mt-10 text-sm font-medium text-gray-400">No pending feedback.</div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {feedbacks.map(fb => (
+                                            <div key={fb.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col hover:border-blue-200 transition-colors">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <span className="font-semibold text-gray-900 text-sm">{fb.userEmail || 'Anonymous'}</span>
+                                                    {fb.createdAt && (
+                                                        <span className="text-[10px] font-semibold text-gray-400">
+                                                            {new Date(fb.createdAt?.toMillis ? fb.createdAt.toMillis() : fb.createdAt).toLocaleDateString()}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100 mb-3">{fb.message}</p>
+                                                
+                                                <div className="mt-auto pt-2 border-t border-gray-50 flex gap-2">
+                                                    <button 
+                                                        onClick={() => handleResolveFeedback(fb)}
+                                                        className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1 transition-colors"
+                                                    >
+                                                        <CheckCircle size={14} /> Mark Resolved
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
-                        <div className="divide-y divide-gray-50">
-                            {fetching ? (
-                                <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-gray-400" size={24} /></div>
-                            ) : feedbacks.length === 0 ? (
-                                <div className="p-8 text-center text-sm text-gray-500">No feedback entries yet.</div>
-                            ) : (
-                                feedbacks.map(fb => (
-                                    <div key={fb.id} className="p-5">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="font-semibold text-gray-900 text-sm">{fb.userEmail || 'Anonymous'}</span>
-                                            {fb.createdAt && (
-                                                <span className="text-xs text-gray-400">
-                                                    {new Date(fb.createdAt?.toMillis ? fb.createdAt.toMillis() : fb.createdAt).toLocaleDateString()}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100">{fb.message}</p>
+                        {/* RESOLVED FEEDBACK COLUMN */}
+                        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col h-full overflow-hidden">
+                            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-slate-100">
+                                <div className="flex items-center gap-2">
+                                    <CheckCircle size={18} className="text-slate-600" />
+                                    <h2 className="font-bold text-gray-900">Resolved Feedback</h2>
+                                </div>
+                                <span className="bg-slate-200 text-slate-700 text-xs font-bold px-2.5 py-0.5 rounded-full">{resolvedFeedbacks.length}</span>
+                            </div>
+
+                            <div className="overflow-y-auto flex-1 p-4 bg-slate-50/50">
+                                {fetching ? (
+                                    <div className="flex justify-center mt-10"><Loader2 className="animate-spin text-gray-400" size={24} /></div>
+                                ) : resolvedFeedbacks.length === 0 ? (
+                                    <div className="text-center mt-10 text-sm font-medium text-gray-400">No resolved feedback yet.</div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {resolvedFeedbacks.map(fb => (
+                                            <div key={fb.id} className="bg-white p-3 rounded-xl border border-gray-100 opacity-90 grayscale-[20%] relative group">
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className="font-semibold text-gray-700 text-xs">{fb.userEmail || 'Anonymous'}</span>
+                                                    {fb.createdAt && (
+                                                        <span className="text-[10px] text-gray-400">
+                                                            {new Date(fb.createdAt?.toMillis ? fb.createdAt.toMillis() : fb.createdAt).toLocaleDateString()}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-gray-500">{fb.message}</p>
+                                                
+                                                <button 
+                                                    onClick={() => {
+                                                        setConfirmAction({
+                                                            isOpen: true,
+                                                            title: 'Delete Feedback Record',
+                                                            message: 'Permanently delete this feedback record?',
+                                                            onConfirm: async () => {
+                                                                try {
+                                                                    await deleteDoc(doc(db, 'feedbacks', fb.id));
+                                                                    setResolvedFeedbacks(prev => prev.filter(f => f.id !== fb.id));
+                                                                    showToast('Feedback record deleted');
+                                                                } catch (e: any) {
+                                                                    showToast('Delete failed', 'error');
+                                                                }
+                                                            }
+                                                        });
+                                                    }}
+                                                    className="absolute top-2 right-2 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity bg-red-50 p-1 rounded-md"
+                                                    title="Delete Record"
+                                                >
+                                                    <XCircle size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))
-                            )}
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
 
                 {/* --- USER REPORTS --- */}
                 {activeModule === 'reports' && (
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in max-w-3xl mx-auto">
-                        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2 bg-red-50">
-                            <Flag size={18} className="text-red-500" />
-                            <h2 className="font-bold text-gray-900">Pending User Moderations</h2>
-                            <span className="ml-auto bg-red-100 text-red-700 text-xs font-bold px-2.5 py-0.5 rounded-full">{userReports.length}</span>
-                        </div>
-
-                        <div className="divide-y divide-gray-50">
-                            {fetching ? (
-                                <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-gray-400" size={24} /></div>
-                            ) : userReports.length === 0 ? (
-                                <div className="p-8 text-center text-sm text-gray-500">No pending reports. Great!</div>
-                            ) : (
-                                userReports.map(report => (
-                                    <div key={report.id} className="p-5">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <div className="flex items-center gap-2">
-                                                <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-lg uppercase">
-                                                    {report.reason}
-                                                </span>
-                                                <span className="text-xs text-gray-400">
-                                                    {report.createdAt ? new Date(report.createdAt?.toMillis ? report.createdAt.toMillis() : report.createdAt).toLocaleDateString() : 'Just now'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-xl border border-gray-100 mb-3 space-y-1">
-                                            <p><span className="font-bold text-gray-900">Reported UID:</span> <span className="font-mono text-xs">{report.reportedUid}</span></p>
-                                            <p><span className="font-bold text-gray-900">Reporter UID:</span> <span className="font-mono text-xs">{report.reporterUid}</span></p>
-                                            {report.details && (
-                                                <p className="mt-2 text-gray-800">"{report.details}"</p>
-                                            )}
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={async () => {
-                                                    const msg = window.prompt("Enter warning message to send directly to this user:");
-                                                    if (msg) {
-                                                        await warnUser(report.reportedUid, msg);
-                                                        await updateDoc(doc(db, 'user_reports', report.id), { status: 'acted_upon' });
-                                                        setUserReports(prev => prev.filter(r => r.id !== report.id));
-                                                        alert("Warning sent.");
-                                                    }
-                                                }}
-                                                className="flex-1 py-2 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg text-sm font-bold transition-colors"
-                                            >
-                                                Send Warning
-                                            </button>
-                                            <button
-                                                onClick={async () => {
-                                                    if (window.confirm("Are you SURE you want to block this user completely?")) {
-                                                        await blockUser(report.reportedUid);
-                                                        await updateDoc(doc(db, 'user_reports', report.id), { status: 'acted_upon' });
-                                                        setUserReports(prev => prev.filter(r => r.id !== report.id));
-                                                        alert("User blocked.");
-                                                    }
-                                                }}
-                                                className="flex-1 py-2 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-bold transition-colors"
-                                            >
-                                                Block User
-                                            </button>
-                                        </div>
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {activeReportsTab === 'home' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 h-[calc(100vh-200px)]">
+                                {/* Dashboard Cards */}
+                                <div onClick={() => openReportsTab('pending')} className="bg-white p-6 rounded-2xl border-2 border-red-100 hover:border-red-300 cursor-pointer transition-all hover:shadow-lg flex flex-col items-center justify-center">
+                                    <Flag size={40} className="text-red-500 mb-4" />
+                                    <h3 className="font-bold text-gray-900 text-lg">Pending Moderation</h3>
+                                    <p className="text-sm font-semibold text-red-600 mt-2">{userReports.length} Reports</p>
+                                </div>
+                                <div onClick={() => openReportsTab('warned')} className="bg-white p-6 rounded-2xl border-2 border-amber-100 hover:border-amber-300 cursor-pointer transition-all hover:shadow-lg flex flex-col items-center justify-center">
+                                    <AlertTriangle size={40} className="text-amber-500 mb-4" />
+                                    <h3 className="font-bold text-gray-900 text-lg">Warned Users</h3>
+                                    <p className="text-sm font-semibold text-amber-600 mt-2">{resolvedUserReports.filter(r => r.status === 'warned').length} Reports</p>
+                                </div>
+                                <div onClick={() => openReportsTab('blocked')} className="bg-white p-6 rounded-2xl border-2 border-rose-900/20 hover:border-rose-900/50 cursor-pointer transition-all hover:shadow-lg flex flex-col items-center justify-center">
+                                    <XCircle size={40} className="text-rose-900 mb-4" />
+                                    <h3 className="font-bold text-gray-900 text-lg">Blocked Users</h3>
+                                    <p className="text-sm font-semibold text-rose-900 mt-2">{resolvedUserReports.filter(r => r.status === 'blocked').length} Reports</p>
+                                </div>
+                                <div onClick={() => openReportsTab('dismissed')} className="bg-white p-6 rounded-2xl border-2 border-gray-200 hover:border-gray-400 cursor-pointer transition-all hover:shadow-lg flex flex-col items-center justify-center">
+                                    <ShieldCheck size={40} className="text-gray-500 mb-4" />
+                                    <h3 className="font-bold text-gray-900 text-lg">Dismissed Reports</h3>
+                                    <p className="text-sm font-semibold text-gray-600 mt-2">{resolvedUserReports.filter(r => r.status === 'dismissed').length} Reports</p>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {activeReportsTab !== 'home' && (
+                            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col h-[calc(100vh-200px)] overflow-hidden">
+                                <div className={`px-5 py-4 border-b border-gray-100 flex items-center justify-between ${
+                                    activeReportsTab === 'pending' ? 'bg-red-50' : 
+                                    activeReportsTab === 'warned' ? 'bg-amber-50' :
+                                    activeReportsTab === 'blocked' ? 'bg-rose-50' : 'bg-slate-100'
+                                }`}>
+                                    <div className="flex items-center gap-3">
+                                        <button onClick={() => openModule('reports')} className="p-1.5 bg-white/50 hover:bg-white rounded-full transition-colors flex items-center justify-center">
+                                            <ArrowLeft size={16} />
+                                        </button>
+                                        <h2 className="font-bold text-gray-900 capitalize">{activeReportsTab} Reports</h2>
                                     </div>
-                                ))
-                            )}
-                        </div>
+                                    <span className="bg-white/50 text-gray-700 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                                        {activeReportsTab === 'pending' ? userReports.length : resolvedUserReports.filter(r => r.status === activeReportsTab).length}
+                                    </span>
+                                </div>
+                                <div className="overflow-y-auto flex-1 p-4 bg-slate-50/50">
+                                    {fetching ? (
+                                        <div className="flex justify-center mt-10"><Loader2 className="animate-spin text-gray-400" size={24} /></div>
+                                    ) : (activeReportsTab === 'pending' ? userReports : resolvedUserReports.filter(r => r.status === activeReportsTab)).length === 0 ? (
+                                        <div className="text-center mt-10 text-sm font-medium text-gray-400">No {activeReportsTab} reports found.</div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {(activeReportsTab === 'pending' ? userReports : resolvedUserReports.filter(r => r.status === activeReportsTab)).map(report => (
+                                                <UserReportCard 
+                                                    key={report.id} 
+                                                    report={report} 
+                                                    activeTab={activeReportsTab}
+                                                    onWarn={handleWarnUser}
+                                                    onBlock={handleBlockUser}
+                                                    onDismiss={handleDismissReport}
+                                                    onUnblock={handleUnblockUser}
+                                                    onDelete={(id) => {
+                                                        setConfirmAction({
+                                                            isOpen: true,
+                                                            title: 'Delete User Report Record',
+                                                            message: 'Permanently delete this report record?',
+                                                            onConfirm: async () => {
+                                                                try {
+                                                                    await deleteDoc(doc(db, 'user_reports', id));
+                                                                    setResolvedUserReports(prev => prev.filter(r => r.id !== id));
+                                                                    showToast('Report record deleted');
+                                                                } catch (e: any) {
+                                                                    showToast('Failed to delete record', 'error');
+                                                                }
+                                                            }
+                                                        });
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -532,6 +815,82 @@ export default function AdminDashboardPage() {
                     </div>
                 </div>
             )}
+
+            {/* Custom General Confirm/Prompt Modal */}
+            {confirmAction?.isOpen && (
+                <div 
+                    className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+                    onClick={() => setConfirmAction(null)}
+                >
+                    <div 
+                        className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+                            {confirmAction.title.includes('Delete') || confirmAction.title.includes('Block') ? (
+                                <AlertTriangle className="text-red-500" size={20} />
+                            ) : confirmAction.title.includes('Warn') ? (
+                                <AlertTriangle className="text-amber-500" size={20} />
+                            ) : null}
+                            {confirmAction.title}
+                        </h3>
+                        <p className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100">{confirmAction.message}</p>
+                        
+                        {confirmAction.isPrompt && (
+                            <textarea
+                                id="prompt-input"
+                                placeholder={confirmAction.promptPlaceholder}
+                                className="w-full h-24 p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none resize-none text-sm mb-4"
+                                autoFocus
+                            />
+                        )}
+                        
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setConfirmAction(null)}
+                                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    let val = undefined;
+                                    if (confirmAction.isPrompt) {
+                                        val = (document.getElementById('prompt-input') as HTMLTextAreaElement)?.value;
+                                         if (!val) {
+                                             showToast('This field is required', 'error');
+                                             return;
+                                         }
+                                    }
+                                    confirmAction.onConfirm(val);
+                                    setConfirmAction(null);
+                                }}
+                                className={`flex-1 px-4 py-2 text-white font-semibold rounded-xl transition-colors cursor-pointer ${
+                                    confirmAction.title.includes('Delete') || confirmAction.title.includes('Block') ? 'bg-red-600 hover:bg-red-700 shadow-red-500/20' : 
+                                    confirmAction.title.includes('Warn') ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20' : 
+                                    'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
+                                } shadow-sm`}
+                            >
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Toast Notification */}
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-4 w-full max-w-xs">
+                {toast && (
+                    <div className={`p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-300 ${
+                        toast.type === 'success' ? 'bg-emerald-600 text-white' : 
+                        toast.type === 'error' ? 'bg-red-600 text-white' : 
+                        'bg-slate-800 text-white'
+                    }`}>
+                        {toast.type === 'success' ? <CheckCircle size={20} /> : toast.type === 'error' ? <AlertTriangle size={20} /> : <MessageSquare size={20} />}
+                        <span className="text-sm font-bold">{toast.title}</span>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

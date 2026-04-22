@@ -1,5 +1,10 @@
 import { db } from "./firebase";
-import { checkViralThreshold, notifyCitizenStatusUpdate, notifyAuthorStatusUpdate } from "./notifications";
+import { 
+    checkViralThreshold, 
+    notifyCitizenStatusUpdate, 
+    notifyAuthorStatusUpdate,
+    notifyAdminsOfNewIssue 
+} from "./notifications";
 import { awardXp } from "./gamification";
 import { getVoteWeight, onConsensusReached, onReportResolved, TRUST_DEFAULT } from "./trust";
 import { incrementMissionProgress } from "./missions";
@@ -126,7 +131,8 @@ function deg2rad(deg: number) {
 }
 
 export const getFeedIssues = async (
-    userCityName: string | null = 'Delhi'
+    userCityName: string | null = 'Delhi',
+    currentUserId?: string
 ) => {
     try {
         // 1. Identify user city & 5 nearest neighbours (city + 5 = 6 total)
@@ -153,8 +159,8 @@ export const getFeedIssues = async (
         const localSnapshot = await withRetry(() => getDocs(localQuery));
         let issues = localSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
 
-        // Filter out unapproved issues
-        issues = issues.filter(i => i.status && i.status !== 'Reported');
+        // Filter out unapproved issues unless the user is the author
+        issues = issues.filter(i => (i.status && i.status !== 'Reported') || (currentUserId && i.userId === currentUserId));
 
         // 3. Sort: user's exact city first, then by hype
         issues.sort((a, b) => {
@@ -174,7 +180,7 @@ export const getFeedIssues = async (
 };
 
 
-export const getTrendingIssues = async (category?: string) => {
+export const getTrendingIssues = async (category?: string, currentUserId?: string) => {
     try {
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -193,8 +199,8 @@ export const getTrendingIssues = async (category?: string) => {
             ...d.data()
         } as Issue));
 
-        // Filter out unapproved issues
-        issues = issues.filter(i => i.status && i.status !== 'Reported');
+        // Filter out unapproved issues unless the user is the author
+        issues = issues.filter(i => (i.status && i.status !== 'Reported') || (currentUserId && i.userId === currentUserId));
 
         // Filter by category if provided
         if (category && category !== 'All') {
@@ -227,7 +233,7 @@ export const getLeaderboardIssues = async (cityName: string | null) => {
         if (cityName) {
             q = query(
                 collection(db, 'issues'),
-                where('status', 'in', ['Verification Needed', 'Verified', 'Active']),
+                where('status', 'in', ['Verification Needed', 'Active', 'Action Seen']),
                 where('cityName', '==', cityName),
                 limit(100) // we fetch 100 and sort in memory because firestore can't sort by sum of fields
             );
@@ -298,7 +304,6 @@ export const createIssue = async (data: IssueData) => {
             votes: 0,
             statusData: {
                 verification_needed: { yesWeight: 0, noWeight: 0, score: 0 },
-                verified: { yesWeight: 0, noWeight: 0, score: 0 },
                 active: { yesWeight: 0, noWeight: 0, score: 0 },
                 action_seen: { yesWeight: 0, noWeight: 0, score: 0 },
                 resolved: { yesWeight: 0, noWeight: 0, score: 0 }
@@ -312,6 +317,9 @@ export const createIssue = async (data: IssueData) => {
             // Track mission progress for report action
             incrementMissionProgress(data.userId, data.cityName || '', 'report', { issueCategory: data.category }).catch(() => { });
         }
+
+        // Notify Admins of the new submission (needs review)
+        notifyAdminsOfNewIssue(docRef.id, data.title, data.category).catch(() => { });
 
         return docRef.id;
     } catch (e) {
@@ -622,17 +630,17 @@ export const hasUserLikedComment = async (issueId: string, commentId: string, us
 // The db string keys match the status options but formatted cleanly
 export const STATUS_DB_KEYS: Record<string, string> = {
     'Verification Needed': 'verification_needed',
-    'Verified': 'verified',
     'Active': 'active',
     'Action Seen': 'action_seen',
     'Resolved': 'resolved',
     // Legacy aliases
     'Under Review': 'under_review',
     'In Progress': 'in_progress',
+    'Verified': 'active', // Legacy: map old 'Verified' votes to 'active'
 };
 
-// Maps the linear progression (new 6-stage lifecycle)
-const STATUS_PROGRESSION = ['Reported', 'Verification Needed', 'Verified', 'Active', 'Action Seen', 'Resolved'];
+// Maps the linear progression (5-stage lifecycle — Verified removed as it was a dead-end)
+const STATUS_PROGRESSION = ['Reported', 'Verification Needed', 'Active', 'Action Seen', 'Resolved'];
 
 /** Normalize legacy statuses to the new lifecycle */
 export function normalizeStatus(status: string): IssueStatusState {
@@ -643,8 +651,7 @@ export function normalizeStatus(status: string): IssueStatusState {
         case 'Under Review':
         case 'Verification Needed':
             return 'Verification Needed';
-        case 'Verified':
-            return 'Verified';
+        case 'Verified': // Legacy: Verified is now merged into Active
         case 'In Progress':
         case 'Active':
             return 'Active';
@@ -741,14 +748,21 @@ export const voteOnStatus = async (
             const currentIndex = STATUS_PROGRESSION.indexOf(currentStatus);
             const targetIndex = STATUS_PROGRESSION.indexOf(targetStatus);
 
-            // Votes are cast on the CURRENT stage (e.g. "Verification Needed").
-            // Forward consensus → advance to the NEXT stage in progression.
-            // Backward consensus → revert to the prior stage.
-            if (netScore > 2.0 && targetIndex === currentIndex && currentIndex < STATUS_PROGRESSION.length - 1) {
-                // Forward Transition: community confirmed the current stage → move to next
-                newStatus = STATUS_PROGRESSION[currentIndex + 1] as IssueStatusState;
-                consensusReached = true;
-            } else if (netScore < -2.0 && currentIndex > 0) {
+            // ── Consensus Logic ──────────────────────────────────────────────
+            // Normal vote: cast on the CURRENT stage → advances to NEXT stage.
+            // Quick vote: cast on a FUTURE stage → jumps directly to that stage.
+            // Regression: score < -2 on current stage → reverts one step back.
+            if (netScore > 2.0) {
+                if (targetIndex === currentIndex && currentIndex < STATUS_PROGRESSION.length - 1) {
+                    // Normal progression: community confirmed current stage → advance one step
+                    newStatus = STATUS_PROGRESSION[currentIndex + 1] as IssueStatusState;
+                    consensusReached = true;
+                } else if (targetIndex > currentIndex) {
+                    // Quick-vote: community confirms issue is already at a future stage → jump directly
+                    newStatus = STATUS_PROGRESSION[targetIndex] as IssueStatusState;
+                    consensusReached = true;
+                }
+            } else if (netScore < -2.0 && targetIndex === currentIndex && currentIndex > 0) {
                 // Backward Transition: community rejects current stage → revert one step
                 newStatus = STATUS_PROGRESSION[currentIndex - 1] as IssueStatusState;
                 consensusReached = true;
@@ -940,7 +954,7 @@ export const searchUsers = async (searchQuery: string): Promise<UserSearchResult
     }
 };
 
-export const searchIssues = async (searchQuery: string): Promise<Issue[]> => {
+export const searchIssues = async (searchQuery: string, currentUserId?: string): Promise<Issue[]> => {
     if (!searchQuery || searchQuery.length < 2) return [];
     try {
         // Fetch recent issues and filter client-side for partial match
@@ -950,7 +964,11 @@ export const searchIssues = async (searchQuery: string): Promise<Issue[]> => {
             limit(100)
         );
         const snapshot = await withRetry(() => getDocs(q));
-        const all = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+        let all = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+        
+        // Filter out unapproved issues unless the user is the author
+        all = all.filter(i => (i.status && i.status !== 'Reported') || (currentUserId && i.userId === currentUserId));
+
         const lower = searchQuery.toLowerCase();
         return all.filter(i =>
             (i.title?.toLowerCase().includes(lower)) ||

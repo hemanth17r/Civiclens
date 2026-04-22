@@ -14,6 +14,7 @@ import ConnectionsModal from '@/components/ConnectionsModal';
 import { getUserGamificationStats } from '@/lib/gamification';
 import { getUserTrustStats, getVoteWeightTier } from '@/lib/trust';
 import { getUserCityRank } from '@/lib/users';
+import { useToast } from '@/context/ToastContext';
 import { TrustBadge } from '@/components/GamificationUI';
 import VerifiedBadge from '@/components/VerifiedBadge';
 
@@ -22,6 +23,7 @@ export default function PublicProfilePage() {
     const router = useRouter();
     const profileId = params?.id as string;
     const { user: currentUser } = useAuth();
+    const { showToast } = useToast();
 
     const [profile, setProfile] = useState<any>(null);
     const [issues, setIssues] = useState<Issue[]>([]);
@@ -78,8 +80,14 @@ export default function PublicProfilePage() {
 
                 const snap = await getDocs(issuesQuery);
                 const fetchedIssues = snap.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+                
                 // Allow all statuses so the community can vote on 'Verification Needed' / 'Reported' ones
-                const publicIssues = fetchedIssues;
+                // FILTER: Only show 'Reported' (Pending Approval) issues to their author
+                const isViewingSelf = currentUser?.uid === profileId;
+                const publicIssues = fetchedIssues.filter(issue => {
+                    if (issue.status === 'Reported' && !isViewingSelf) return false;
+                    return true;
+                });
                 setIssues(publicIssues);
 
                 // Fetch Gamification & Trust Data
@@ -129,7 +137,7 @@ export default function PublicProfilePage() {
 
     const handleFollowToggle = async () => {
         if (!currentUser) {
-            alert("You must be logged in to follow users.");
+            showToast("You must be logged in to follow users.", "error");
             return;
         }
         setActionLoading(true);
@@ -145,7 +153,7 @@ export default function PublicProfilePage() {
             }
         } catch (e) {
             console.error('Follow action failed:', e);
-            alert("Failed to update follow status.");
+            showToast("Failed to update follow status.", "error");
         } finally {
             setActionLoading(false);
         }
@@ -153,16 +161,16 @@ export default function PublicProfilePage() {
 
     const handleReport = async () => {
         if (!currentUser) {
-            alert("You must be logged in to report a user.");
+            showToast("You must be logged in to report a user.", "error");
             return;
         }
         setReporting(true);
         try {
             await reportUser(profileId, currentUser.uid, reportReason, reportDetails);
-            alert("Report submitted successfully.");
+            showToast("Report submitted successfully.", "success");
             setShowReportModal(false);
         } catch (e) {
-            alert("Failed to submit report.");
+            showToast("Failed to submit report.", "error");
         } finally {
             setReporting(false);
         }

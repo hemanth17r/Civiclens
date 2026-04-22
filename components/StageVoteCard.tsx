@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 
 export interface StageVoteCardProps {
     stage: any;
+    prompt?: string;       // optional override for the question text (used by quick-vote)
     yesWeight: number;
     noWeight: number;
     score: number;
@@ -12,18 +13,18 @@ export interface StageVoteCardProps {
     userVote?: 'yes' | 'no' | null; // Keep track if the user has already voted on this
 }
 
-export default function StageVoteCard({ stage, yesWeight, noWeight, score, isVoting, onVote, userVote }: StageVoteCardProps) {
+export default function StageVoteCard({ stage, prompt, yesWeight, noWeight, score, isVoting, onVote, userVote }: StageVoteCardProps) {
     const totalWeight = yesWeight + noWeight;
     const percentageYes = totalWeight > 0 ? Math.max(5, Math.min(95, Math.round((yesWeight / totalWeight) * 100))) : 50;
     
-    // Humanized prompts based on stage key
+    // Humanized prompts based on stage key (overridden by `prompt` prop for quick-votes)
     const getPrompt = () => {
+        if (prompt) return prompt;
         switch (stage.key) {
             case 'Verification Needed': return "Is this a real issue?";
-            case 'Verified': return "Has work started yet?";
-            case 'Active': return "Do you see progress?";
-            case 'Action Seen': return "Is it fully resolved?";
-            case 'Resolved': return "Should this stay resolved?";
+            case 'Active': return "Has any action started on this?";
+            case 'Action Seen': return "Is work actively being done?";
+            case 'Resolved': return "Is this issue fully fixed?";
             default: return "Update status?";
         }
     };

@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, googleProvider, db } from '@/lib/firebase';
+import { registerForPushNotifications } from '@/lib/fcmRegistration';
 
 // Interface for our custom user profile in Firestore
 export interface UserProfile {
@@ -145,6 +146,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     setUserProfile(profileData);
                     setProfileChecked(true);
                     setLoading(false);
+
+                    // Register for push notifications if admin
+                    const adminEmails = ["hemanthreddya276@gmail.com"];
+                    const isAdminUser = adminEmails.includes(profileData.email);
+                    if (isAdminUser) {
+                        registerForPushNotifications(user.uid).catch(err => console.warn('FCM registration failed:', err));
+                    }
                 } else {
                     setUserProfile(null);
                     setProfileChecked(true);

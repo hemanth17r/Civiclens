@@ -7,12 +7,14 @@ import { getTrendingIssues, searchUsers, searchIssues, Issue, UserSearchResult }
 import IssueCard from '@/components/IssueCard';
 import { useRouter } from 'next/navigation';
 import { INDIAN_CITIES } from '@/data/cities';
+import { useAuth } from '@/context/AuthContext';
 
 // Match categories with ReportIssueDialog
 const categories = ["All", "Road", "Waste", "Water", "Safety", "Infrastructure", "Environment", "Other"];
 
 export default function ExplorePage() {
     const router = useRouter();
+    const { user } = useAuth();
     const [selectedCategory, setSelectedCategory] = useState("All");
 
     // Trending
@@ -35,14 +37,14 @@ export default function ExplorePage() {
     const fetchTrending = useCallback(async (cat: string) => {
         setLoadingTrending(true);
         try {
-            const data = await getTrendingIssues(cat);
+            const data = await getTrendingIssues(cat, user?.uid);
             setTrendingIssues(data);
         } catch (e) {
             console.error('Error fetching trending:', e);
         } finally {
             setLoadingTrending(false);
         }
-    }, []);
+    }, [user?.uid]);
 
     useEffect(() => {
         fetchTrending(selectedCategory);
@@ -97,7 +99,7 @@ export default function ExplorePage() {
 
             const [users, issues] = await Promise.all([
                 searchUsers(searchQuery),
-                searchIssues(searchQuery)
+                searchIssues(searchQuery, user?.uid)
             ]);
             setSearchResultsUsers(users);
             setSearchResultsIssues(issues);
