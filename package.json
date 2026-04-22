@@ -36,5 +36,9 @@
     "firebase-tools": "^15.5.1",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "http-proxy-agent": "^7.0.0",
+    "@tootallnate/once": "^3.0.1"
   }
 }
