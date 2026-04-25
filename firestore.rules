@@ -63,7 +63,7 @@ service cloud.firestore {
       allow update: if isAuthenticated() && request.resource.data.userId == resource.data.userId && (
         isAdmin() ||
         isOwner(resource.data.userId) ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'savesCount', 'commentCount', 'sharesCount', 'statusData', 'status', 'flagCount', 'isHidden'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'savesCount', 'commentCount', 'sharesCount', 'statusData', 'status', 'statusChangedLog', 'flagCount', 'isHidden'])
       );
       allow delete: if isAuthenticated() && (isOwner(resource.data.userId) || isAdmin());
 
@@ -117,10 +117,10 @@ service cloud.firestore {
       // Status votes subcollection (crowdsourced status voting)
       match /statusVotes/{voteId} {
         allow read: if isAuthenticated();
-        // Users can only create/update their own votes (voteId starts with their UID)
+        // Users can only create/update/delete their own votes (voteId starts with their UID)
         allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
         allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-        allow delete: if false;
+        allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
       }
     }
 
@@ -167,6 +167,17 @@ service cloud.firestore {
         allow create, update: if false; // Only server (Admin SDK) can update mission progress
         allow delete: if false;
       }
+    }
+
+    // --- Collection Group Queries for User Activity ---
+    match /{path=**}/hypes/{hypeId} {
+      allow read: if isAuthenticated();
+    }
+    match /{path=**}/saves/{saveId} {
+      allow read: if isAuthenticated();
+    }
+    match /{path=**}/comments/{commentId} {
+      allow read: if isAuthenticated();
     }
   }
 }

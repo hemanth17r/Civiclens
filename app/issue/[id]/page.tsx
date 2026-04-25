@@ -7,7 +7,7 @@ import { clsx } from 'clsx';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
 import StageVoteCard from '@/components/StageVoteCard';
-import { getIssueById, Issue, IssueStatusState, normalizeStatus, voteOnStatus, STATUS_DB_KEYS } from '@/lib/issues';
+import { getIssueById, getUserStatusVotes, Issue, IssueStatusState, normalizeStatus, voteOnStatus, STATUS_DB_KEYS } from '@/lib/issues';
 import { deleteDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
@@ -90,9 +90,11 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     const router = useRouter();
     const { user, isAdmin } = useAuth();
     const [votingStageKey, setVotingStageKey] = useState<string | null>(null);
-    const [quickVoteOpen, setQuickVoteOpen] = useState<string | null>(null); // tracks which quick-vote card is expanded
+    const [quickVoteOpen, setQuickVoteOpen] = useState<string | null>(null);
     const [showVerifiedInfo, setShowVerifiedInfo] = useState(false);
     const verifiedInfoRef = useRef<HTMLDivElement>(null);
+    // Per-stage user vote tracking: stageKey -> 'yes' | 'no' | null
+    const [userVotes, setUserVotes] = useState<Record<string, 'yes' | 'no' | null>>({});
 
     const unwrappedParams = React.use(params);
     const issueId = unwrappedParams.id;
@@ -143,6 +145,14 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
         return () => { cancelled = true; };
     }, [issueId]);
 
+    // Load the user's existing votes for this issue once user+issue are known
+    useEffect(() => {
+        if (!user || !issueId || user.isAnonymous) return;
+        getUserStatusVotes(issueId, user.uid)
+            .then(votes => setUserVotes(votes))
+            .catch(() => {});
+    }, [issueId, user?.uid]);
+
     const handleDeleteIssue = async () => {
         setIsDeleting(true);
         try {
@@ -167,6 +177,12 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
         try {
             const res = await voteOnStatus(issueId, user.uid, targetStageKey as IssueStatusState, voteType);
             if (res.success) {
+                // Update per-stage user-vote state
+                setUserVotes(prev => ({
+                    ...prev,
+                    [targetStageKey]: res.deselected ? null : voteType,
+                }));
+                // Update issue stats in local state
                 setIssue(prev => {
                     if (!prev) return prev;
                     const dbKey = STATUS_DB_KEYS[targetStageKey];
@@ -174,10 +190,14 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                     if (dbKey && res.currentStats) {
                         newStatusData[dbKey] = res.currentStats;
                     }
+                    const newStatusChangedLog = res.consensusReached && res.newStatus && !res.deselected
+                        ? [...(prev.statusChangedLog || []), { from: prev.status, to: res.newStatus, at: new Date().toISOString() }]
+                        : prev.statusChangedLog;
                     return {
                         ...prev,
                         statusData: newStatusData,
-                        status: res.consensusReached && res.newStatus ? res.newStatus : prev.status
+                        statusChangedLog: newStatusChangedLog,
+                        status: res.consensusReached && res.newStatus ? res.newStatus : prev.status,
                     };
                 });
             } else {
@@ -258,53 +278,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
         ? formatDistanceToNow(issue.createdAt.toDate(), { addSuffix: true })
         : 'Recently';
 
-    // Build timeline entries from available data
-    const timelineEntries: { date: string; label: string; color: string }[] = [];
-    const baseDate = issue.createdAt?.toDate ? issue.createdAt.toDate().getTime() : Date.now() - 86400000 * 7;
-    const maxDate = Date.now();
 
-    const getBoundedDate = (offsetDays: number) => {
-        return new Date(Math.min(maxDate, baseDate + 86400000 * offsetDays));
-    };
-
-    timelineEntries.push({
-        date: format(new Date(baseDate), 'MMM d'),
-        label: 'Issue reported',
-        color: LIFECYCLE_STAGES[0].color,
-    });
-
-    if (currentStageIdx >= 1) {
-        const d = issue.approvedAt?.toDate ? issue.approvedAt.toDate() : getBoundedDate(1);
-        timelineEntries.push({
-            date: format(d, 'MMM d'),
-            label: 'Verification started',
-            color: LIFECYCLE_STAGES[1].color,
-        });
-    }
-    if (currentStageIdx >= 2) {
-        const d = getBoundedDate(3);
-        timelineEntries.push({
-            date: format(d, 'MMM d'),
-            label: 'Verified & marked active',
-            color: LIFECYCLE_STAGES[2].color,
-        });
-    }
-    if (currentStageIdx >= 3) {
-        const d = getBoundedDate(5);
-        timelineEntries.push({
-            date: format(d, 'MMM d'),
-            label: 'Action activity detected',
-            color: LIFECYCLE_STAGES[3].color,
-        });
-    }
-    if (currentStageIdx >= 4) {
-        const d = issue.resolvedAt?.toDate ? issue.resolvedAt.toDate() : getBoundedDate(7);
-        timelineEntries.push({
-            date: format(d, 'MMM d'),
-            label: 'Issue resolved',
-            color: LIFECYCLE_STAGES[4].color,
-        });
-    }
 
     return (
         <div className="bg-white min-h-screen pb-20">
@@ -470,20 +444,20 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                                                         Current
                                                     </span>
                                                 )}
-                                                {/* Quick-vote edit icon — right-aligned */}
+                                                {/* Quick-vote edit icon — right-aligned, always blue & visible */}
                                                 {showQuickVoteIcon && (
                                                     <button
                                                         onClick={() => setQuickVoteOpen(prev => prev === stage.key ? null : stage.key)}
                                                         className={clsx(
-                                                            "ml-auto p-1.5 rounded-lg transition-all",
+                                                            "ml-auto p-2 rounded-lg transition-all",
                                                             isQuickVoteExpanded
-                                                                ? "bg-gray-200 text-gray-700"
-                                                                : "text-gray-300 hover:text-gray-500 hover:bg-gray-100"
+                                                                ? "bg-blue-100 text-blue-700"
+                                                                : "text-blue-500 hover:text-blue-700 hover:bg-blue-50"
                                                         )}
                                                         title={`Quick vote: ${stage.label}`}
                                                         aria-label={`Quick vote to mark as ${stage.label}`}
                                                     >
-                                                        <Pencil size={14} />
+                                                        <Pencil size={16} />
                                                     </button>
                                                 )}
                                             </div>
@@ -496,26 +470,28 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                                             
                                             {/* Render Inline Vote Card for the CURRENT stage when it requires community voting */}
                                             {isCurrent && stage.canVote && (
-                                                <StageVoteCard 
+                                                <StageVoteCard
                                                     stage={stage}
                                                     yesWeight={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.yesWeight || 0}
                                                     noWeight={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.noWeight || 0}
                                                     score={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.score || 0}
                                                     isVoting={votingStageKey === stage.key}
                                                     onVote={(type) => handleInlineVote(stage.key, type)}
+                                                    userVote={userVotes[stage.key] ?? null}
                                                 />
                                             )}
 
                                             {/* Quick-vote card (expanded when pencil icon is clicked on a future stage) */}
                                             {isQuickVoteExpanded && !isCurrent && (
                                                 <StageVoteCard
-                                                    stage={{ ...stage, key: stage.key }}
+                                                    stage={stage}
                                                     prompt={getQuickVotePrompt(stage.key)}
                                                     yesWeight={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.yesWeight || 0}
                                                     noWeight={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.noWeight || 0}
                                                     score={issue.statusData?.[STATUS_DB_KEYS[stage.key]]?.score || 0}
                                                     isVoting={votingStageKey === stage.key}
                                                     onVote={(type) => handleInlineVote(stage.key, type)}
+                                                    userVote={userVotes[stage.key] ?? null}
                                                 />
                                             )}
                                         </div>
@@ -526,25 +502,82 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                     </div>
                 </div>
 
-                {/* ── PUBLIC TIMELINE ────────────────────────────────────── */}
-                {timelineEntries.length > 0 && (
-                    <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
-                        <div className="flex items-center gap-2 mb-4">
-                            <Clock size={16} className="text-gray-400" />
-                            <h3 className="font-bold text-gray-900 text-sm">Public Timeline</h3>
-                            <span className="text-[10px] text-gray-400 font-medium">Transparency builds trust</span>
+                {/* ── PUBLIC TIMELINE — driven by real statusChangedLog ───── */}
+                {(() => {
+                    // Build timeline from real log + the initial "Reported" entry
+                    const logEntries: { date: string; label: string; color: string }[] = [];
+
+                    // Always first: issue reported
+                    const reportedDate = issue.createdAt?.toDate ? issue.createdAt.toDate() : null;
+                    logEntries.push({
+                        date: reportedDate ? format(reportedDate, 'MMM d') : 'Earlier',
+                        label: 'Issue reported',
+                        color: LIFECYCLE_STAGES[0].color,
+                    });
+
+                    // Append approved-at entry if approvedAt exists
+                    if (issue.approvedAt?.toDate) {
+                        logEntries.push({
+                            date: format(issue.approvedAt.toDate(), 'MMM d'),
+                            label: 'Approved — verification opened',
+                            color: LIFECYCLE_STAGES[1].color,
+                        });
+                    }
+
+                    // Real transition log (every stage change, including back-and-forth)
+                    const stageColorMap: Record<string, string> = {};
+                    LIFECYCLE_STAGES.forEach(s => { stageColorMap[s.key] = s.color; });
+
+                    const transitionLabels: Record<string, Record<string, string>> = {
+                        'Verification Needed': { 'Active': 'Community verified ✓', 'Reported': 'Reverted to reported ↩' },
+                        'Active': { 'Action Seen': 'Action confirmed by community ✓', 'Verification Needed': 'Reverted to verification ↩' },
+                        'Action Seen': { 'Resolved': 'Issue fully resolved ✓', 'Active': 'Reverted to active ↩' },
+                        'Reported': { 'Verification Needed': 'Reopened for verification' },
+                    };
+
+                    if (issue.statusChangedLog && issue.statusChangedLog.length > 0) {
+                        for (const entry of issue.statusChangedLog) {
+                            try {
+                                const d = new Date(entry.at);
+                                const label = transitionLabels[entry.from]?.[entry.to]
+                                    || `Status: ${entry.from} → ${entry.to}`;
+                                logEntries.push({
+                                    date: format(d, 'MMM d'),
+                                    label,
+                                    color: stageColorMap[entry.to] || '#6B7280',
+                                });
+                            } catch { /* skip malformed entries */ }
+                        }
+                    }
+
+                    // Also append resolved-at if available and not already in log
+                    if (issue.resolvedAt?.toDate && issue.status === 'Resolved' && !issue.statusChangedLog?.some(e => e.to === 'Resolved')) {
+                        logEntries.push({
+                            date: format(issue.resolvedAt.toDate(), 'MMM d'),
+                            label: 'Issue resolved ✓',
+                            color: LIFECYCLE_STAGES[4].color,
+                        });
+                    }
+
+                    return (
+                        <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
+                            <div className="flex items-center gap-2 mb-4">
+                                <Clock size={16} className="text-gray-400" />
+                                <h3 className="font-bold text-gray-900 text-sm">Public Timeline</h3>
+                                <span className="text-[10px] text-gray-400 font-medium">Transparency builds trust</span>
+                            </div>
+                            <div className="space-y-3">
+                                {logEntries.map((entry, idx) => (
+                                    <div key={idx} className="flex items-center gap-3">
+                                        <span className="text-xs font-bold text-gray-500 w-14 flex-shrink-0">{entry.date}</span>
+                                        <span className="text-gray-300">→</span>
+                                        <span className="text-sm font-medium" style={{ color: entry.color }}>{entry.label}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                        <div className="space-y-3">
-                            {timelineEntries.map((entry, idx) => (
-                                <div key={idx} className="flex items-center gap-3">
-                                    <span className="text-xs font-bold text-gray-500 w-14 flex-shrink-0">{entry.date}</span>
-                                    <span className="text-gray-300">→</span>
-                                    <span className="text-sm text-gray-700 font-medium">{entry.label}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
+                    );
+                })()}
 
                 {/* Description */}
                 {issue.description && (

@@ -26,7 +26,8 @@ import {
     deleteDoc,
     getDoc,
     collectionGroup,
-    Timestamp
+    Timestamp,
+    documentId
 } from "firebase/firestore";
 
 /**
@@ -93,6 +94,8 @@ export interface Issue extends IssueData {
     afterImageUrl?: string;
     resolvedAt?: any;
     approvedAt?: any;
+    /** Immutable ordered log of every status transition for the public timeline */
+    statusChangedLog?: Array<{ from: string; to: string; at: string }>;
 }
 
 // ── Fetch single issue by ID ───────────────────────────────────────────────
@@ -626,6 +629,33 @@ export const hasUserLikedComment = async (issueId: string, commentId: string, us
     return snap.exists();
 };
 
+/**
+ * Fetch the current user's vote for every votable stage on a given issue.
+ * Returns a map of stageKey -> 'yes' | 'no' | null.
+ * Uses individual getDoc calls (4 reads) which is cheaper than a query.
+ */
+export const getUserStatusVotes = async (
+    issueId: string,
+    userId: string
+): Promise<Record<string, 'yes' | 'no' | null>> => {
+    if (!issueId || !userId) return {};
+    const stageKeys = ['Verification Needed', 'Active', 'Action Seen', 'Resolved'] as const;
+    const result: Record<string, 'yes' | 'no' | null> = {};
+    await Promise.all(
+        stageKeys.map(async (stageKey) => {
+            const voteDocId = `${userId}_${stageKey.replace(/ /g, '_').toLowerCase()}`;
+            const voteRef = doc(db, 'issues', issueId, 'statusVotes', voteDocId);
+            try {
+                const snap = await getDoc(voteRef);
+                result[stageKey] = snap.exists() ? (snap.data().vote as 'yes' | 'no') : null;
+            } catch {
+                result[stageKey] = null;
+            }
+        })
+    );
+    return result;
+};
+
 // --- Crowdsourced Status Methods ---
 // The db string keys match the status options but formatted cleanly
 export const STATUS_DB_KEYS: Record<string, string> = {
@@ -664,8 +694,9 @@ export function normalizeStatus(status: string): IssueStatusState {
     }
 }
 
-export type VoteOnStatusResult = 
-    | { success: true; consensusReached: boolean; newStatus: IssueStatusState; currentStats: { yesWeight: number, noWeight: number, score: number } }
+export type VoteOnStatusResult =
+    | { success: true; deselected?: false; consensusReached: boolean; newStatus: IssueStatusState; currentStats: { yesWeight: number; noWeight: number; score: number } }
+    | { success: true; deselected: true; consensusReached: false; newStatus: IssueStatusState; currentStats: { yesWeight: number; noWeight: number; score: number } }
     | { success: false; error: string };
 
 export const voteOnStatus = async (
@@ -676,17 +707,29 @@ export const voteOnStatus = async (
 ): Promise<VoteOnStatusResult> => {
     if (!issueId || !userId || !targetStatus || targetStatus === 'Open') return { success: false, error: 'Invalid parameters' };
 
-    // Anti-manipulation: check vote rate limit
-    const voteCheck = await canVoteOnStatus(userId);
-    if (!voteCheck.allowed) {
-        return { success: false, error: voteCheck.reason || 'Vote rate limit exceeded.' };
-    }
-
     const issueRef = doc(db, 'issues', issueId);
-    // User vote document path
-    const voteRef = doc(db, 'issues', issueId, 'statusVotes', `${userId}_${targetStatus.replace(' ', '_').toLowerCase()}`);
+    // User vote document path — replace ALL spaces to avoid collisions between multi-word statuses
+    const voteRef = doc(db, 'issues', issueId, 'statusVotes', `${userId}_${targetStatus.replace(/ /g, '_').toLowerCase()}`);
 
     try {
+        // ── Pre-flight: detect deselect BEFORE rate-limiting ────────────────
+        // If the user already voted the same option, this is a deselect — skip the rate limit.
+        let isLikelyDeselect = false;
+        try {
+            const existingVoteSnap = await getDoc(voteRef);
+            if (existingVoteSnap.exists() && existingVoteSnap.data().vote === voteType) {
+                isLikelyDeselect = true;
+            }
+        } catch { /* ignore — transaction will catch this */ }
+
+        // Anti-manipulation: only rate-limit actual new/flipped votes
+        if (!isLikelyDeselect) {
+            const voteCheck = await canVoteOnStatus(userId);
+            if (!voteCheck.allowed) {
+                return { success: false, error: voteCheck.reason || 'Vote rate limit exceeded.' };
+            }
+        }
+
         const result = await runTransaction(db, async (t) => {
             const issueDoc = await t.get(issueRef);
             if (!issueDoc.exists()) throw new Error("Issue not found");
@@ -694,11 +737,13 @@ export const voteOnStatus = async (
             const voteDoc = await t.get(voteRef);
             let previousVoteType: 'yes' | 'no' | null = null;
             let previousVoteWeight = 0;
-            
+            let isDeselecting = false;
+
             if (voteDoc.exists()) {
                 const prevData = voteDoc.data();
                 if (prevData.vote === voteType) {
-                    throw new Error("User has already voted this exact option");
+                    // Same button clicked again → deselect (remove the vote)
+                    isDeselecting = true;
                 }
                 previousVoteType = prevData.vote;
                 previousVoteWeight = prevData.weightApplied || 0;
@@ -721,9 +766,37 @@ export const voteOnStatus = async (
 
             // Initialize statusData if old issue
             const statusData = issueData.statusData || {};
-            const targetData = statusData[dbKey] || { yesWeight: 0, noWeight: 0, score: 0 };
+            const targetData = { ...(statusData[dbKey] || { yesWeight: 0, noWeight: 0, score: 0 }) };
 
-            // Revert previous vote weight if user flipped their vote
+            // ── Deselect path: user clicked the same option they already voted ──
+            if (isDeselecting) {
+                // Revert the weight of the existing vote
+                if (previousVoteType === 'yes') {
+                    targetData.yesWeight = Math.max(0, targetData.yesWeight - previousVoteWeight);
+                } else if (previousVoteType === 'no') {
+                    targetData.noWeight = Math.max(0, targetData.noWeight - previousVoteWeight);
+                }
+                targetData.score = targetData.yesWeight - targetData.noWeight;
+
+                // Remove the vote document
+                t.delete(voteRef);
+
+                // Update issue stats (status does NOT change on deselect)
+                t.update(issueRef, { [`statusData.${dbKey}`]: targetData });
+
+                return {
+                    success: true as const,
+                    deselected: true as const,
+                    consensusReached: false as const,
+                    newStatus: currentStatus as IssueStatusState,
+                    currentStats: targetData,
+                    _issueTitle: issueData.title,
+                    _authorUid: issueData.userId,
+                };
+            }
+
+            // ── Normal / flip vote path ──────────────────────────────────────
+            // Revert previous vote weight if user is flipping from one option to the other
             if (previousVoteType === 'yes') {
                 targetData.yesWeight = Math.max(0, targetData.yesWeight - previousVoteWeight);
             } else if (previousVoteType === 'no') {
@@ -777,19 +850,37 @@ export const voteOnStatus = async (
                 createdAt: serverTimestamp()
             });
 
-            // Update Issue
-            t.update(issueRef, {
+            // Build update payload
+            const updatePayload: Record<string, any> = {
                 [`statusData.${dbKey}`]: targetData,
-                ...(consensusReached && { status: newStatus }) // If we leveled up the status, save it
-            });
+            };
+
+            if (consensusReached && newStatus !== currentStatus) {
+                updatePayload.status = newStatus;
+                // Append a timestamped entry to the public timeline log (arrayUnion equivalent via Firestore array)
+                // We store the log as an array field `statusChangedLog` on the issue document.
+                // Since we cannot use arrayUnion inside runTransaction easily, we read the existing log and push.
+                const existingLog: any[] = issueData.statusChangedLog || [];
+                updatePayload.statusChangedLog = [
+                    ...existingLog,
+                    {
+                        from: currentStatus,
+                        to: newStatus,
+                        at: new Date().toISOString(), // ISO string — close enough for display; server time unavailable inside transaction
+                    }
+                ];
+            }
+
+            t.update(issueRef, updatePayload);
 
             return {
                 success: true as const,
+                deselected: false as const,
                 consensusReached,
-                newStatus,
+                newStatus: newStatus as IssueStatusState,
                 currentStats: targetData,
                 _issueTitle: issueData.title,
-                _authorUid: issueData.userId
+                _authorUid: issueData.userId,
             };
         });
 
@@ -800,12 +891,12 @@ export const voteOnStatus = async (
             onConsensusReached(issueId, result.newStatus).catch(() => { });
         }
 
-        // Award XP to the voter for participating in verification (fire-and-forget)
-        awardXp(userId, 'VERIFICATION_VOTE').catch(() => { });
-        // Track mission progress for verify action
-        incrementMissionProgress(userId, '', 'verify').catch(() => { });
-        // Log vote for rate-limiting
-        logVote(userId, issueId).catch(() => { });
+        // Only award XP / log vote for actual votes — not deselects
+        if (!result.deselected) {
+            awardXp(userId, 'VERIFICATION_VOTE').catch(() => { });
+            incrementMissionProgress(userId, '', 'verify').catch(() => { });
+            logVote(userId, issueId).catch(() => { });
+        }
 
         const { _issueTitle, _authorUid, ...cleanResult } = result;
         return cleanResult as VoteOnStatusResult;
@@ -823,7 +914,7 @@ const fetchIssuesByIds = async (ids: string[]): Promise<Issue[]> => {
     const uniqueIds = [...new Set(ids)].slice(0, 30);
     const q = query(
         collection(db, 'issues'),
-        where('__name__', 'in', uniqueIds)
+        where(documentId(), 'in', uniqueIds)
     );
     const snapshot = await withRetry(() => getDocs(q));
     return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
@@ -839,7 +930,11 @@ export const getUserHypedIssues = async (userId: string): Promise<Issue[]> => {
         );
         const snapshot = await withRetry(() => getDocs(q));
         const issueIds = snapshot.docs.map(d => d.data().issueId || d.ref.parent.parent?.id).filter(Boolean) as string[];
-        return fetchIssuesByIds(issueIds);
+        const uniqueIds = [...new Set(issueIds)];
+        const issues = await fetchIssuesByIds(uniqueIds);
+        
+        // Re-sort to match the chronological order of the 'hypes' collectionGroup query
+        return uniqueIds.map(id => issues.find(i => i.id === id)).filter(Boolean) as Issue[];
     } catch (error) {
         console.warn("Error fetching hyped issues:", error);
         return [];
@@ -864,7 +959,10 @@ export const getUserCommentedIssues = async (userId: string): Promise<Issue[]> =
             if (parentIssueId) issueIds.push(parentIssueId);
         }
         const uniqueIds = [...new Set(issueIds)];
-        return fetchIssuesByIds(uniqueIds);
+        const issues = await fetchIssuesByIds(uniqueIds);
+        
+        // Re-sort to match the chronological order of the 'comments' collectionGroup query
+        return uniqueIds.map(id => issues.find(i => i.id === id)).filter(Boolean) as Issue[];
     } catch (error) {
         console.warn("Error fetching commented issues:", error);
         return [];
@@ -912,7 +1010,11 @@ export const getUserSavedIssues = async (userId: string): Promise<Issue[]> => {
         );
         const snapshot = await withRetry(() => getDocs(q));
         const issueIds = snapshot.docs.map(d => d.data().issueId || d.ref.parent.parent?.id).filter(Boolean) as string[];
-        return fetchIssuesByIds(issueIds);
+        const uniqueIds = [...new Set(issueIds)];
+        const issues = await fetchIssuesByIds(uniqueIds);
+        
+        // Re-sort to match the chronological order of the 'saves' collectionGroup query
+        return uniqueIds.map(id => issues.find(i => i.id === id)).filter(Boolean) as Issue[];
     } catch (error) {
         console.warn("Error fetching saved issues:", error);
         return [];

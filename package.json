@@ -39,6 +39,9 @@
   },
   "overrides": {
     "http-proxy-agent": "^7.0.0",
-    "@tootallnate/once": "^3.0.1"
+    "@tootallnate/once": "^3.0.1",
+    "fast-xml-parser": "^5.7.0",
+    "uuid": "^14.0.0",
+    "postcss": "^8.5.10"
   }
 }
