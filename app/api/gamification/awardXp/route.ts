@@ -10,6 +10,7 @@ function checkBadgeUnlocks(
     uid: string,
     action: keyof typeof XP_ACTIONS,
     userData: any,
+    updateData: any,
     metadata?: { category?: string; hypeCount?: number }
 ) {
     const existing: string[] = userData.badges || [];
@@ -58,7 +59,7 @@ function checkBadgeUnlocks(
         addIfNew('viral_report');
     }
 
-    const streak = userData.currentStreak || 0;
+    const streak = updateData.currentStreak !== undefined ? updateData.currentStreak : (userData.currentStreak || 0);
     if (streak >= 7) addIfNew('streak_7');
     if (streak >= 30) addIfNew('streak_30');
 
@@ -139,13 +140,13 @@ export async function POST(req: Request) {
         const oldLevel = getLevelFromXp(currentXp);
         const newLevel = getLevelFromXp(newXp);
         const leveledUp = newLevel.level > oldLevel.level;
-        const newBadges = checkBadgeUnlocks(uid, action as any, data, metadata);
+        const levelChanged = newLevel.level !== oldLevel.level;
 
         const updateData: Record<string, any> = {
             xp: admin.firestore.FieldValue.increment(xpAmount),
         };
 
-        if (leveledUp) {
+        if (levelChanged) {
             updateData.level = newLevel.level;
             updateData.levelTitle = newLevel.title;
         }
@@ -157,6 +158,9 @@ export async function POST(req: Request) {
             case 'VERIFICATION_VOTE':
                 updateData['gamificationStats.totalVerifications'] = admin.firestore.FieldValue.increment(1);
                 break;
+            case 'VERIFICATION_VOTE_REVOKED':
+                updateData['gamificationStats.totalVerifications'] = admin.firestore.FieldValue.increment(-1);
+                break;
             case 'COMMENT_ADDED':
                 updateData['gamificationStats.totalComments'] = admin.firestore.FieldValue.increment(1);
                 break;
@@ -165,12 +169,30 @@ export async function POST(req: Request) {
                 break;
         }
 
+        await updateStreak(uid, updateData, data);
+        
+        const newBadges = checkBadgeUnlocks(uid, action as any, data, updateData, metadata);
+
         if (newBadges.length > 0) {
             const allBadges = [...new Set([...currentBadges, ...newBadges.map(b => b.id)])];
             updateData.badges = allBadges;
+            
+            const batch = db.batch();
+            for (const badge of newBadges) {
+                const notifRef = db.collection('notifications').doc();
+                batch.set(notifRef, {
+                    targetUid: uid,
+                    type: 'badge_unlocked',
+                    isUrgent: false,
+                    title: 'Badge Unlocked! 🏆',
+                    body: `You unlocked the ${badge.name} badge: ${badge.description}`,
+                    read: false,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            }
+            await batch.commit();
         }
 
-        await updateStreak(uid, updateData, data);
         await userRef.update(updateData);
 
         return NextResponse.json({

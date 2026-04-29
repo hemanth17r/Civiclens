@@ -173,16 +173,60 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
             return;
         }
 
-        setVotingStageKey(targetStageKey);
+        // --- OPTIMISTIC UI UPDATE START ---
+        // 1. Snapshot the current state for rollback
+        const previousUserVotes = { ...userVotes };
+        const previousIssue = issue ? { ...issue } : null;
+
+        // 2. Determine if this is a deselect action
+        const currentVote = userVotes[targetStageKey];
+        const isDeselect = currentVote === voteType;
+        const newVoteState = isDeselect ? null : voteType;
+
+        // 3. Optimistically update userVotes
+        setUserVotes(prev => ({
+            ...prev,
+            [targetStageKey]: newVoteState,
+        }));
+
+        // 4. Optimistically update issue stats
+        setIssue(prev => {
+            if (!prev) return prev;
+            const dbKey = STATUS_DB_KEYS[targetStageKey];
+            const newStatusData = { ...prev.statusData };
+            
+            if (dbKey) {
+                const currentStats = newStatusData[dbKey] || { yes: 0, no: 0 };
+                const updatedStats = { ...currentStats };
+
+                // Revert previous vote if existed
+                if (currentVote === 'yes') updatedStats.yes = Math.max(0, updatedStats.yes - 1);
+                if (currentVote === 'no') updatedStats.no = Math.max(0, updatedStats.no - 1);
+
+                // Apply new vote if not deselecting
+                if (!isDeselect) {
+                    if (voteType === 'yes') updatedStats.yes += 1;
+                    if (voteType === 'no') updatedStats.no += 1;
+                }
+                
+                newStatusData[dbKey] = updatedStats;
+            }
+
+            return {
+                ...prev,
+                statusData: newStatusData,
+            };
+        });
+
+        // Background sync with server
         try {
             const res = await voteOnStatus(issueId, user.uid, targetStageKey as IssueStatusState, voteType);
             if (res.success) {
-                // Update per-stage user-vote state
+                // Sync exact state from server
                 setUserVotes(prev => ({
                     ...prev,
                     [targetStageKey]: res.deselected ? null : voteType,
                 }));
-                // Update issue stats in local state
                 setIssue(prev => {
                     if (!prev) return prev;
                     const dbKey = STATUS_DB_KEYS[targetStageKey];
@@ -201,12 +245,16 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                     };
                 });
             } else {
-                alert(res.error || 'Failed to record vote');
+                // Rollback on functional error
+                setUserVotes(previousUserVotes);
+                setIssue(previousIssue);
+                alert(res.error || 'Failed to record vote. Changes reverted.');
             }
         } catch (e: any) {
-            alert(e.message || 'Error recording vote');
-        } finally {
-            setVotingStageKey(null);
+            // Rollback on exception
+            setUserVotes(previousUserVotes);
+            setIssue(previousIssue);
+            alert(e.message || 'Error recording vote. Changes reverted.');
         }
     };
 

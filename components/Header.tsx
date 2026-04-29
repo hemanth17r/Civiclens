@@ -57,7 +57,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, onReportClick }) => {
                             onClick={() => setIsAuthOpen(true)}
                             className="text-sm font-bold text-gray-700 hover:bg-gray-100 px-4 py-2 rounded-full transition-colors"
                         >
-                            Log In
+                            Sign In
                         </button>
                     )}
                 </div>

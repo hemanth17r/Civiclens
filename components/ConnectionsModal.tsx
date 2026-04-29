@@ -125,16 +125,16 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
                     initial={{ opacity: 0, scale: 0.95, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-sm flex flex-col max-h-[85vh] overflow-hidden"
+                    className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm flex flex-col max-h-[85vh] overflow-hidden"
                 >
                     {/* Header */}
-                    <div className="flex items-center justify-center p-4 border-b border-gray-100 dark:border-gray-800 relative flex-shrink-0">
-                        <h2 className="text-base font-bold text-gray-900 dark:text-white capitalize">
+                    <div className="flex items-center justify-center p-4 border-b border-gray-100 relative flex-shrink-0">
+                        <h2 className="text-base font-bold text-gray-900 capitalize">
                             {type}
                         </h2>
                         <button
                             onClick={onClose}
-                            className="absolute right-4 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                            className="absolute right-4 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
                         >
                             <X size={20} />
                         </button>
@@ -149,7 +149,7 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
                                 placeholder="Search"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-sm rounded-xl py-2 pl-9 pr-4 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700"
+                                className="w-full bg-gray-100 text-gray-900 text-sm rounded-xl py-2 pl-9 pr-4 focus:outline-none focus:ring-2 focus:ring-gray-200"
                             />
                         </div>
                     </div>
@@ -171,10 +171,10 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
                                         <div
                                             key={u.uid}
                                             onClick={() => handleUserClick(u.uid)}
-                                            className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors"
+                                            className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
                                         >
                                             <div className="flex items-center gap-3 min-w-0">
-                                                <div className="w-11 h-11 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-100 dark:border-gray-700">
+                                                <div className="w-11 h-11 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-100">
                                                     {u.photoURL ? (
                                                         <img src={u.photoURL} alt={u.displayName} className="w-full h-full object-cover" />
                                                     ) : (
@@ -182,7 +182,7 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
                                                     )}
                                                 </div>
                                                 <div className="min-w-0 flex flex-col">
-                                                    <span className="font-bold text-sm text-gray-900 dark:text-white truncate leading-tight">
+                                                    <span className="font-bold text-sm text-gray-900 truncate leading-tight">
                                                         {u.handle ? `@${u.handle.replace('@', '')}` : u.displayName}
                                                     </span>
                                                     <span className="text-sm text-gray-500 truncate leading-tight mt-0.5">
@@ -196,7 +196,7 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
                                                     onClick={(e) => handleFollowToggle(u.uid, e)}
                                                     disabled={isActionLoading}
                                                     className={`ml-3 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors flex-shrink-0 ${isFollowing
-                                                            ? 'bg-gray-200 hover:bg-gray-300 text-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white'
+                                                            ? 'bg-gray-200 hover:bg-gray-300 text-gray-900'
                                                             : 'bg-blue-600 hover:bg-blue-700 text-white'
                                                         }`}
                                                 >

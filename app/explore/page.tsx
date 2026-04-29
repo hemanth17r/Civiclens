@@ -28,10 +28,11 @@ export default function ExplorePage() {
     const [searchResultsIssues, setSearchResultsIssues] = useState<Issue[]>([]);
     const [showSearchResults, setShowSearchResults] = useState(false);
     const [isResultsView, setIsResultsView] = useState(false);
-    const [activeTab, setActiveTab] = useState<'accounts' | 'posts' | 'places'>('posts');
+    const [activeTab, setActiveTab] = useState<'accounts' | 'posts' | 'places'>('accounts');
     const [matchedCity, setMatchedCity] = useState<string | null>(null);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const searchContainerRef = useRef<any>(null);
+    const mobileSearchRef = useRef<HTMLFormElement>(null);
+    const desktopSearchRef = useRef<HTMLFormElement>(null);
 
     // Fetch trending issues
     const fetchTrending = useCallback(async (cat: string) => {
@@ -94,7 +95,7 @@ export default function ExplorePage() {
                 setActiveTab('places');
             } else {
                 setMatchedCity(null);
-                setActiveTab('posts');
+                setActiveTab('accounts');
             }
 
             const [users, issues] = await Promise.all([
@@ -113,7 +114,9 @@ export default function ExplorePage() {
     // Close search results on click outside
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
-            if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+            const isInsideMobile = mobileSearchRef.current?.contains(e.target as Node);
+            const isInsideDesktop = desktopSearchRef.current?.contains(e.target as Node);
+            if (!isInsideMobile && !isInsideDesktop) {
                 setShowSearchResults(false);
             }
         };
@@ -121,11 +124,66 @@ export default function ExplorePage() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const renderDropdown = () => {
+        if (!showSearchResults) return null;
+        return (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 max-h-[70vh] overflow-y-auto z-30">
+                {isSearching ? (
+                    <div className="flex justify-center py-8">
+                        <Loader2 className="animate-spin text-gray-400" size={20} />
+                    </div>
+                ) : (
+                    <>
+                        {/* User results */}
+                        {searchResultsUsers.length > 0 && (
+                            <div className="p-3">
+                                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-2 mb-2">Accounts</p>
+                                {searchResultsUsers.map(u => (
+                                    <button
+                                        key={u.uid}
+                                        type="button"
+                                        onClick={() => {
+                                            setShowSearchResults(false);
+                                            router.push(`/profile/${u.uid}`);
+                                        }}
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
+                                    >
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-400 to-purple-400 p-[1.5px] flex-shrink-0">
+                                            <div className="w-full h-full rounded-full bg-white overflow-hidden flex items-center justify-center">
+                                                {u.photoURL ? (
+                                                    <img src={u.photoURL} alt="" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <User size={16} className="text-gray-400" />
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="text-sm font-bold text-gray-900">{u.handle}</p>
+                                            <p className="text-xs text-gray-500">{u.displayName}</p>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* No results */}
+                        {searchResultsUsers.length === 0 && !isSearching && searchQuery.length > 0 && (
+                            <div className="p-8 text-center text-gray-400">
+                                <p className="text-sm font-medium">No results found</p>
+                                <p className="text-xs mt-1">Try a different search term</p>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+        );
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
             {/* Sticky Header */}
             <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md pt-4 pb-2 px-4 shadow-sm md:hidden">
-                <form onSubmit={handleSearchSubmit} className="relative" ref={searchContainerRef}>
+                <form onSubmit={handleSearchSubmit} className="relative" ref={mobileSearchRef}>
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     <input
                         type="text"
@@ -136,58 +194,7 @@ export default function ExplorePage() {
                         className="w-full bg-gray-100 rounded-full py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
                     />
 
-                    {/* Search Results Dropdown */}
-                    {showSearchResults && (
-                        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 max-h-[70vh] overflow-y-auto z-30">
-                            {isSearching ? (
-                                <div className="flex justify-center py-8">
-                                    <Loader2 className="animate-spin text-gray-400" size={20} />
-                                </div>
-                            ) : (
-                                <>
-                                    {/* User results */}
-                                    {searchResultsUsers.length > 0 && (
-                                        <div className="p-3">
-                                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-2 mb-2">Accounts</p>
-                                            {searchResultsUsers.map(u => (
-                                                <button
-                                                    key={u.uid}
-                                                    onClick={() => {
-                                                        setShowSearchResults(false);
-                                                        router.push(`/profile/${u.uid}`);
-                                                    }}
-                                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
-                                                >
-                                                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-400 to-purple-400 p-[1.5px] flex-shrink-0">
-                                                        <div className="w-full h-full rounded-full bg-white overflow-hidden flex items-center justify-center">
-                                                            {u.photoURL ? (
-                                                                <img src={u.photoURL} alt="" className="w-full h-full object-cover" />
-                                                            ) : (
-                                                                <User size={16} className="text-gray-400" />
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-left">
-                                                        <p className="text-sm font-bold text-gray-900">{u.handle}</p>
-                                                        <p className="text-xs text-gray-500">{u.displayName}</p>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-
-
-                                    {/* No results */}
-                                    {searchResultsUsers.length === 0 && searchResultsIssues.length === 0 && !isSearching && (
-                                        <div className="p-8 text-center text-gray-400">
-                                            <p className="text-sm font-medium">No results found</p>
-                                            <p className="text-xs mt-1">Try a different search term</p>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </div>
-                    )}
+                    {renderDropdown()}
                 </form>
             </div>
 
@@ -207,7 +214,7 @@ export default function ExplorePage() {
                         </button>
                     )}
                 </div>
-                <form onSubmit={handleSearchSubmit} className="relative max-w-xl" ref={searchContainerRef}>
+                <form onSubmit={handleSearchSubmit} className="relative max-w-xl" ref={desktopSearchRef}>
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                     <input
                         type="text"
@@ -217,6 +224,7 @@ export default function ExplorePage() {
                         onFocus={() => { if (searchQuery.length >= 1) setShowSearchResults(true); }}
                         className="w-full bg-gray-50 border border-gray-200 rounded-full py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
                     />
+                    {renderDropdown()}
                 </form>
             </div>
 

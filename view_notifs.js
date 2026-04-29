@@ -14,24 +14,23 @@ for (const line of lines) {
 
 let saKey;
 try {
-  const evaled = eval('(' + saKeyStr + ')');
-  if (typeof evaled === 'string') {
-    saKey = JSON.parse(evaled);
-  } else {
-    saKey = evaled;
-const keyStr = saKeyStr
+  // Remove wrapping quotes if present
+  const keyStr = saKeyStr
     .replace(/\\n/g, '\n')
     .trim();
 
-// Remove wrapping quotes if present
-const cleanKeyStr = (keyStr.startsWith("'") && keyStr.endsWith("'")) 
+  const cleanKeyStr = (keyStr.startsWith("'") && keyStr.endsWith("'")) 
     ? keyStr.slice(1, -1) 
     : keyStr;
 
-const saKey = JSON.parse(cleanKeyStr);
+  saKey = JSON.parse(cleanKeyStr);
 
-if (saKey.private_key) {
-  saKey.private_key = saKey.private_key.replace(/\\n/g, '\n');
+  if (saKey.private_key) {
+    saKey.private_key = saKey.private_key.replace(/\\n/g, '\n');
+  }
+} catch (e) {
+  console.error("Error parsing service account key:", e);
+  process.exit(1);
 }
 
 admin.initializeApp({

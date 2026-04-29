@@ -1,10 +1,10 @@
-﻿'use client';
+'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import {
     User, FileText, Heart, Menu, X, LogOut,
-    Camera, Check, Loader2, ChevronRight, UserCircle, Info, MapPin, Bookmark, Flame, MessageCircle, MessageSquare, Shield, Zap, Award
+    Camera, Check, Loader2, ChevronRight, UserCircle, Info, MapPin, Bookmark, Flame, MessageCircle, MessageSquare, Shield, Zap, Award, Map
 } from 'lucide-react';
 import { collection, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
@@ -21,10 +21,10 @@ import ConnectionsModal from '@/components/ConnectionsModal';
 import { getUserGamificationStats, getLevelFromXp, getXpProgress, type Badge as GBadge } from '@/lib/gamification';
 import { getUserTrustStats, getVoteWeightTier } from '@/lib/trust';
 import { getUserCityRank } from '@/lib/users';
-import { LevelBadge, XpProgressBar, TrustBadge, BadgeGrid, StreakDisplay } from '@/components/GamificationUI';
+import { LevelBadge, XpProgressBar, TrustBadge, BadgeGrid, StreakDisplay, AchievementGallery } from '@/components/GamificationUI';
 import VerifiedBadge from '@/components/VerifiedBadge';
 
-type DrawerSection = null | 'menu' | 'editProfile' | 'accountDetails' | 'feedback';
+type DrawerSection = null | 'menu' | 'editProfile' | 'accountDetails' | 'feedback' | 'achievements';
 type ActivitySubTab = 'hyped' | 'commented' | 'saved';
 
 export default function ProfilePage() {
@@ -401,6 +401,7 @@ export default function ProfilePage() {
                                     emoji={gamification.level.emoji}
                                     color={gamification.level.color}
                                 />
+
                             </div>
 
                             {/* XP Progress */}
@@ -492,7 +493,7 @@ export default function ProfilePage() {
                         </button>
                         <button
                             onClick={() => setActiveTab('activity')}
-                            className={clsx("flex-1 py-3 flex items-center justify-center gap-2 border-b-2 transition-colors", activeTab === 'activity' ? "border-gray-900" : "border-transparent")}
+                            className={clsx("flex-1 py-2.5 flex items-center justify-center gap-2 border-b-2 transition-colors", activeTab === 'activity' ? "border-gray-900" : "border-transparent")}
                         >
                             <Heart size={20} className={clsx("transition-colors", activeTab === 'activity' ? "text-gray-900" : "text-gray-400")} />
                             <span className={clsx("text-sm font-semibold transition-colors", activeTab === 'activity' ? "text-gray-900" : "text-gray-400")}>My Activity</span>
@@ -527,7 +528,7 @@ export default function ProfilePage() {
                             <button
                                 onClick={() => setActivitySubTab('hyped')}
                                 className={clsx(
-                                    "flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
+                                    "flex-1 py-2.5 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
                                     activitySubTab === 'hyped' ? "border-orange-500 text-orange-600 bg-orange-50/50" : "border-transparent text-gray-400 hover:text-gray-600"
                                 )}
                             >
@@ -537,7 +538,7 @@ export default function ProfilePage() {
                             <button
                                 onClick={() => setActivitySubTab('commented')}
                                 className={clsx(
-                                    "flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
+                                    "flex-1 py-2.5 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
                                     activitySubTab === 'commented' ? "border-blue-500 text-blue-600 bg-blue-50/50" : "border-transparent text-gray-400 hover:text-gray-600"
                                 )}
                             >
@@ -547,7 +548,7 @@ export default function ProfilePage() {
                             <button
                                 onClick={() => setActivitySubTab('saved')}
                                 className={clsx(
-                                    "flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
+                                    "flex-1 py-2.5 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
                                     activitySubTab === 'saved' ? "border-gray-900 text-gray-900 bg-gray-50" : "border-transparent text-gray-400 hover:text-gray-600"
                                 )}
                             >
@@ -874,6 +875,26 @@ export default function ProfilePage() {
                                             {submittingFeedback ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Submit Feedback'}
                                         </button>
                                     </div>
+                                </div>
+                            )}
+
+                            {/* ── ACHIEVEMENTS JOURNEY ── */}
+                            {drawer === 'achievements' && gamification && (
+                                <div className="flex flex-col h-full bg-white relative">
+                                    <div className="absolute top-4 right-4 z-[100]">
+                                        <button onClick={() => setDrawer(null)} className="p-2 rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-md transition-colors shadow-sm">
+                                            <X size={18} />
+                                        </button>
+                                    </div>
+                                    <AchievementGallery
+                                        userXp={gamification.xp}
+                                        userLevel={gamification.level.level}
+                                        unlockedBadges={gamification.badges}
+                                        currentStreak={gamification.currentStreak}
+                                        longestStreak={gamification.longestStreak}
+                                        totalReports={gamification.stats.totalReports}
+                                        totalVerifications={gamification.stats.totalVerifications}
+                                    />
                                 </div>
                             )}
 

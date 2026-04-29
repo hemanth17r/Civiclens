@@ -687,7 +687,7 @@ export default function AdminDashboardPage() {
                 {activeModule === 'reports' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                         {activeReportsTab === 'home' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 h-[calc(100vh-200px)]">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                 {/* Dashboard Cards */}
                                 <div onClick={() => openReportsTab('pending')} className="bg-white p-6 rounded-2xl border-2 border-red-100 hover:border-red-300 cursor-pointer transition-all hover:shadow-lg flex flex-col items-center justify-center">
                                     <Flag size={40} className="text-red-500 mb-4" />

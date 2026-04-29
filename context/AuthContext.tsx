@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import {
     User,
     signOut,
@@ -10,7 +10,8 @@ import {
     signInWithEmailLink,
     GoogleAuthProvider,
     signInWithCredential,
-    signInWithPopup
+    signInWithPopup,
+    getRedirectResult
 } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, googleProvider, db } from '@/lib/firebase';
@@ -63,7 +64,7 @@ interface AuthContextType {
     isAdmin: boolean;
     sendMagicLink: (email: string) => Promise<void>;
     loginWithGoogleCredential: (idToken: string) => Promise<void>;
-    loginWithGooglePopup: () => Promise<void>;
+    loginWithGoogle: () => Promise<void>;
     logout: () => Promise<void>;
 }
 
@@ -76,7 +77,7 @@ const AuthContext = createContext<AuthContextType>({
     isAdmin: false,
     sendMagicLink: async () => { },
     loginWithGoogleCredential: async () => { },
-    loginWithGooglePopup: async () => { },
+    loginWithGoogle: async () => { },
     logout: async () => { },
 });
 
@@ -88,22 +89,41 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [loading, setLoading] = useState(true);
     const [profileChecked, setProfileChecked] = useState(false);
 
+    const magicLinkProcessed = useRef(false);
+
     useEffect(() => {
+        // Suppress Google Sign-In FedCM errors which crash Next.js dev server UI
+        if (typeof window !== 'undefined') {
+            const originalConsoleError = console.error;
+            console.error = (...args) => {
+                if (typeof args[0] === 'string' && args[0].includes('[GSI_LOGGER]')) return;
+                originalConsoleError.apply(console, args);
+            };
+        }
+
         // Handle Magic Link cross-device / same-device resolution
-        if (typeof window !== 'undefined' && isSignInWithEmailLink(auth, window.location.href)) {
+        if (typeof window !== 'undefined' && isSignInWithEmailLink(auth, window.location.href) && !magicLinkProcessed.current) {
+            magicLinkProcessed.current = true;
             let email = window.localStorage.getItem('emailForSignIn');
             if (!email) {
+                // To avoid blocking the render thread or double prompts in strict mode, 
+                // we use a simple window.prompt. Since we have magicLinkProcessed ref, it will only prompt once.
                 email = window.prompt('Please provide your email for confirmation to complete sign-in.');
             }
             if (email) {
                 signInWithEmailLink(auth, email, window.location.href)
                     .then(() => {
                         window.localStorage.removeItem('emailForSignIn');
-                        window.history.replaceState(null, '', window.location.origin);
+                        window.history.replaceState(null, '', window.location.pathname);
+                        alert("Successfully signed in!");
                     })
                     .catch((error) => {
                         console.warn('Error signing in with magic link:', error);
+                        alert("Failed to sign in with magic link. It may have expired or already been used.");
                     });
+            } else {
+                // If they cancelled the prompt, reset the ref so they could try again if they refresh
+                magicLinkProcessed.current = false;
             }
         }
 
@@ -179,7 +199,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const sendMagicLink = async (email: string) => {
         const actionCodeSettings = {
-            url: window.location.origin,
+            url: window.location.href,
             handleCodeInApp: true,
         };
         try {
@@ -201,7 +221,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
-    const loginWithGooglePopup = async () => {
+    const loginWithGoogle = async () => {
         try {
             await signInWithPopup(auth, googleProvider);
         } catch (error) {
@@ -224,7 +244,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const isOfficial = userProfile?.role === 'official' || isAdmin;
 
     return (
-        <AuthContext.Provider value={{ user, userProfile, loading, profileChecked, isOfficial, isAdmin, sendMagicLink, loginWithGoogleCredential, loginWithGooglePopup, logout }}>
+        <AuthContext.Provider value={{ user, userProfile, loading, profileChecked, isOfficial, isAdmin, sendMagicLink, loginWithGoogleCredential, loginWithGoogle, logout }}>
             {children}
         </AuthContext.Provider>
     );

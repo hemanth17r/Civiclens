@@ -35,6 +35,7 @@ export const XP_ACTIONS = {
     REPORT_SUBMITTED: { xp: 20, label: 'Report Submitted' },
     REPORT_RESOLVED: { xp: 50, label: 'Report Resolved' },
     VERIFICATION_VOTE: { xp: 10, label: 'Verified an Issue' },
+    VERIFICATION_VOTE_REVOKED: { xp: -10, label: 'Revoked Verification Vote' },
     COMMENT_ADDED: { xp: 5, label: 'Commented' },
     FIRST_REPORT: { xp: 30, label: 'First Report Bonus' },
     DAILY_STREAK_BONUS: { xp: 15, label: 'Daily Streak Bonus' },

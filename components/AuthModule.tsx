@@ -12,7 +12,7 @@ interface AuthModuleProps {
 }
 
 export default function AuthModule({ isOpen, onClose, triggerAction = "to join the movement" }: AuthModuleProps) {
-    const { sendMagicLink, loginWithGooglePopup } = useAuth();
+    const { sendMagicLink, loginWithGoogle } = useAuth();
     const [email, setEmail] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isSent, setIsSent] = useState(false);
@@ -72,7 +72,7 @@ export default function AuthModule({ isOpen, onClose, triggerAction = "to join t
                         <p className="text-gray-500 mb-8 max-w-[250px] mx-auto text-sm">
                             {isSent
                                 ? "Check your inbox for the magic link to complete sign in."
-                                : "Log in or sign up to continue."}
+                                : "Sign in or sign up to continue."}
                         </p>
 
                         {!isSent ? (
@@ -85,7 +85,9 @@ export default function AuthModule({ isOpen, onClose, triggerAction = "to join t
                                         try {
                                             setIsLoading(true);
                                             setError('');
-                                            await loginWithGooglePopup();
+                                            
+                                            await loginWithGoogle();
+                                            
                                             onClose();
                                         } catch (e: any) {
                                             console.error(e);

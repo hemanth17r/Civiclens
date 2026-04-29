@@ -792,6 +792,7 @@ export const voteOnStatus = async (
                     currentStats: targetData,
                     _issueTitle: issueData.title,
                     _authorUid: issueData.userId,
+                    _previousVoteType: previousVoteType,
                 };
             }
 
@@ -881,6 +882,7 @@ export const voteOnStatus = async (
                 currentStats: targetData,
                 _issueTitle: issueData.title,
                 _authorUid: issueData.userId,
+                _previousVoteType: previousVoteType,
             };
         });
 
@@ -892,13 +894,15 @@ export const voteOnStatus = async (
         }
 
         // Only award XP / log vote for actual votes — not deselects
-        if (!result.deselected) {
+        if (result.deselected) {
+            awardXp(userId, 'VERIFICATION_VOTE_REVOKED').catch(() => { });
+        } else if ((result as any)._previousVoteType === null) {
             awardXp(userId, 'VERIFICATION_VOTE').catch(() => { });
             incrementMissionProgress(userId, '', 'verify').catch(() => { });
             logVote(userId, issueId).catch(() => { });
         }
 
-        const { _issueTitle, _authorUid, ...cleanResult } = result;
+        const { _issueTitle, _authorUid, _previousVoteType, ...cleanResult } = result as any;
         return cleanResult as VoteOnStatusResult;
     } catch (e: any) {
         console.error("Status vote transaction failed: ", e);

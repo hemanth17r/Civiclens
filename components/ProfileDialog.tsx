@@ -83,7 +83,7 @@ export default function ProfileDialog({ isOpen, onClose }: ProfileDialogProps) {
                             className="w-full bg-gray-100 hover:bg-red-50 text-gray-700 hover:text-red-600 font-bold py-3 px-6 rounded-xl transition-all flex items-center justify-center gap-2"
                         >
                             <LogOut size={20} />
-                            Log Out
+                            Sign Out
                         </button>
                     </div>
                 </motion.div>

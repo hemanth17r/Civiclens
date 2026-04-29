@@ -1,12 +1,14 @@
 'use client';
 
+import dynamic from 'next/dynamic';
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { getFeedIssues, Issue } from '@/lib/issues';
 import IssueCard from '@/components/IssueCard';
-import ReportIssueDialog from '@/components/ReportIssueDialog';
-import AuthModule from '@/components/AuthModule';
+const ReportIssueDialog = dynamic(() => import('@/components/ReportIssueDialog'), { ssr: false });
+const AuthModule = dynamic(() => import('@/components/AuthModule'), { ssr: false });
 import { useRouter } from 'next/navigation';
 import Script from 'next/script';
 import { RotateCw, ArrowRight } from 'lucide-react';

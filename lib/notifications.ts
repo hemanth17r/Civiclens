@@ -2,7 +2,7 @@ import {
     collection, doc, addDoc, getDocs, getDoc, updateDoc, query, where, orderBy,
     limit, serverTimestamp, Timestamp, writeBatch, increment
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 
 // ═══════════════════════════════════════════════════════════════════════
 // NOTIFICATION TYPES & CONSTANTS
@@ -21,7 +21,8 @@ export type NotificationType =
     | 'issue_rejected'
     | 'author_milestone'
     | 'author_status'
-    | 'admin_new_issue';
+    | 'admin_new_issue'
+    | 'badge_unlocked';
 
 export interface NotificationData {
     id: string;
@@ -460,11 +461,26 @@ export const notifyAdminsOfNewIssue = async (
 
         // 2. Trigger External Notification (Push/Email) via API Route
         // This is non-blocking to ensure fast issue submission
-        fetch('/api/admin/notify-issue', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ issueId, issueTitle, category })
-        }).catch(err => console.warn('External admin notification failed:', err));
+        (async () => {
+            try {
+                const currentUser = auth.currentUser;
+                if (!currentUser) {
+                    console.warn('No authenticated user available for push notification API call.');
+                    return;
+                }
+                const idToken = await currentUser.getIdToken();
+                await fetch('/api/admin/notify-issue', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${idToken}`
+                    },
+                    body: JSON.stringify({ issueId, issueTitle, category })
+                });
+            } catch (err) {
+                console.warn('External admin notification failed:', err);
+            }
+        })();
 
     } catch (e) {
         console.error('Error notifying admins of new issue:', e);

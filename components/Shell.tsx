@@ -1,11 +1,13 @@
 'use client';
 
+import dynamic from 'next/dynamic';
+
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import BottomNav from './BottomNav';
-import ReportIssueDialog from './ReportIssueDialog';
-import OnboardingModal from './OnboardingModal';
+const ReportIssueDialog = dynamic(() => import('./ReportIssueDialog'), { ssr: false });
+const OnboardingModal = dynamic(() => import('./OnboardingModal'), { ssr: false });
 import NotificationBell from './NotificationBell';
 
 interface ShellProps {
