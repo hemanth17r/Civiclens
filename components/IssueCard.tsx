@@ -283,7 +283,15 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                 <HeartAnimation isVisible={showHeartAnim} />
 
                 {/* Status Pill — shows current status, links to timeline */}
-                <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+                <div className="absolute top-4 right-4 z-10 flex flex-col items-end gap-2">
+                    <button
+                        onClick={handleStatusClick}
+                        className={clsx(
+                            "px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md backdrop-blur-md transition-all active:scale-95 border border-white/20 flex items-center gap-1 cursor-pointer hover:opacity-90",
+                            getStatusColor(issue.status)
+                        )}>
+                        {getDisplayStatus(issue.status)}
+                    </button>
                     {/* Pending Approval Badge */}
                     {issue.status === 'Reported' && (
                         <div className="relative" ref={pendingInfoRef}>
@@ -294,7 +302,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                                 <Info size={12} /> Pending Approval
                             </button>
                             {showPendingInfo && (
-                                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-100 rounded-2xl shadow-xl p-4 z-20 animate-in fade-in slide-in-from-top-2 duration-200 cursor-default" onClick={(e) => e.stopPropagation()}>
+                                <div className="absolute right-0 top-full mt-2 w-[240px] sm:w-64 bg-white border border-gray-100 rounded-2xl shadow-xl p-4 z-20 animate-in fade-in slide-in-from-top-2 duration-200 cursor-default" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex items-center gap-2 mb-2">
                                         <Info size={14} className="text-amber-500 flex-shrink-0" />
                                         <span className="text-xs font-bold text-gray-900 uppercase tracking-wider">Needs Admin Approval</span>
@@ -306,14 +314,6 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                             )}
                         </div>
                     )}
-                    <button
-                        onClick={handleStatusClick}
-                        className={clsx(
-                            "px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md backdrop-blur-md transition-all active:scale-95 border border-white/20 flex items-center gap-1 cursor-pointer hover:opacity-90",
-                            getStatusColor(issue.status)
-                        )}>
-                        {getDisplayStatus(issue.status)}
-                    </button>
                 </div>
             </div>
 
