@@ -4,9 +4,7 @@ import path from 'path';
 const nextConfig = {
   /* config options here */
   reactCompiler: true,
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+
   turbopack: {
     root: path.resolve('.'),
   },

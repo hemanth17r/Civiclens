@@ -196,18 +196,20 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
             const newStatusData = { ...prev.statusData };
             
             if (dbKey) {
-                const currentStats = newStatusData[dbKey] || { yes: 0, no: 0 };
+                const currentStats = newStatusData[dbKey] || { yesWeight: 0, noWeight: 0, score: 0 };
                 const updatedStats = { ...currentStats };
 
                 // Revert previous vote if existed
-                if (currentVote === 'yes') updatedStats.yes = Math.max(0, updatedStats.yes - 1);
-                if (currentVote === 'no') updatedStats.no = Math.max(0, updatedStats.no - 1);
+                if (currentVote === 'yes') updatedStats.yesWeight = Math.max(0, updatedStats.yesWeight - 1);
+                if (currentVote === 'no') updatedStats.noWeight = Math.max(0, updatedStats.noWeight - 1);
 
                 // Apply new vote if not deselecting
                 if (!isDeselect) {
-                    if (voteType === 'yes') updatedStats.yes += 1;
-                    if (voteType === 'no') updatedStats.no += 1;
+                    if (voteType === 'yes') updatedStats.yesWeight += 1;
+                    if (voteType === 'no') updatedStats.noWeight += 1;
                 }
+                
+                updatedStats.score = updatedStats.yesWeight - updatedStats.noWeight;
                 
                 newStatusData[dbKey] = updatedStats;
             }
