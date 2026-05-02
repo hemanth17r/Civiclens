@@ -11,8 +11,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://civiclens.tech"),
   title: "CivicLens",
   description: "Accountability You Can See",
+  verification: {
+    google: "08wTaMLvsSQFGPhXn5S664z6Nq6_wNfGqM0T9tO1TDU",
+  },
 };
 
 export default function RootLayout({
