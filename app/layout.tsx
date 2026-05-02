@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   title: "CivicLens",
   description: "Accountability You Can See",
   verification: {
-    google: "08wTaMLvsSQFGPhXn5S664z6Nq6_wNfGqM0T9tO1TDU",
+    google: "08wTaMLvsSQFGFRaRQZq-E8gkXWS_pPWm8hWnc2_LaY",
   },
 };
 
