@@ -28,12 +28,21 @@ export const metadata: Metadata = {
     title: "CivicLens — Report & Track Civic Issues in Your City",
     description:
       "Report potholes, waste, water, and infrastructure issues in your city. Track progress, verify resolutions, and hold officials accountable.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "CivicLens — Accountability You Can See",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "CivicLens — Report & Track Civic Issues in Your City",
     description:
       "Report potholes, waste, water, and infrastructure issues in your city. Track progress, verify resolutions, and hold officials accountable.",
+    images: ["/og-image.png"],
   },
 };
 
