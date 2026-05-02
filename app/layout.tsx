@@ -12,10 +12,28 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://civiclens.tech"),
-  title: "CivicLens",
-  description: "Accountability You Can See",
+  title: {
+    default: "CivicLens — Report & Track Civic Issues in Your City",
+    template: "%s — CivicLens",
+  },
+  description:
+    "Report potholes, waste, water, and infrastructure issues in your city. Track progress, verify resolutions, and hold officials accountable — all in one platform.",
   verification: {
     google: "08wTaMLvsSQFGFRaRQZq-E8gkXWS_pPWm8hWnc2_LaY",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_IN",
+    siteName: "CivicLens",
+    title: "CivicLens — Report & Track Civic Issues in Your City",
+    description:
+      "Report potholes, waste, water, and infrastructure issues in your city. Track progress, verify resolutions, and hold officials accountable.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "CivicLens — Report & Track Civic Issues in Your City",
+    description:
+      "Report potholes, waste, water, and infrastructure issues in your city. Track progress, verify resolutions, and hold officials accountable.",
   },
 };
 
