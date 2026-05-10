@@ -8,6 +8,22 @@ import {
     getDocs,
     getCountFromServer
 } from 'firebase/firestore';
+
+/**
+ * Handle Firestore permission-denied errors by retrying after a short delay.
+ * Useful for the split-second after login before auth tokens propagate.
+ */
+const withRetry = async <T>(fn: () => Promise<T>, retries = 3): Promise<T> => {
+    try {
+        return await fn();
+    } catch (e: any) {
+        if (retries > 0 && (e.code === 'permission-denied' || e.message?.includes('permissions'))) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            return withRetry(fn, retries - 1);
+        }
+        throw e;
+    }
+};
 import { UserProfile } from '@/context/AuthContext';
 export type { UserProfile };
 
@@ -24,7 +40,7 @@ export const getTopContributorsByCity = async (cityName: string, limitCount: num
             limit(limitCount)
         );
 
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         return snapshot.docs.map(doc => ({
             uid: doc.id,
             ...doc.data()
@@ -46,7 +62,7 @@ export const getUserCityRank = async (cityName: string, userXp: number): Promise
             where('city', '==', cityName),
             where('xp', '>', userXp) // Rank is count of users with strictly more XP + 1
         );
-        const snapshot = await getCountFromServer(q);
+        const snapshot = await withRetry(() => getCountFromServer(q));
         return snapshot.data().count + 1;
     } catch (error) {
         console.warn('Error fetching city rank:', error);

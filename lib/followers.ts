@@ -1,6 +1,22 @@
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, getDoc, getDocs, query, where, serverTimestamp, runTransaction, increment } from 'firebase/firestore';
 
+/**
+ * Handle Firestore permission-denied errors by retrying after a short delay.
+ * Useful for the split-second after login before auth tokens propagate.
+ */
+const withRetry = async <T>(fn: () => Promise<T>, retries = 3): Promise<T> => {
+    try {
+        return await fn();
+    } catch (e: any) {
+        if (retries > 0 && (e.code === 'permission-denied' || e.message?.includes('permissions'))) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            return withRetry(fn, retries - 1);
+        }
+        throw e;
+    }
+};
+
 export interface FollowStats {
     followersCount: number;
     followingCount: number;
@@ -12,7 +28,7 @@ export const getFollowStatus = async (currentUid: string, targetUid: string): Pr
     try {
         const followDocId = `${currentUid}_${targetUid}`;
         const followRef = doc(db, 'follows', followDocId);
-        const snap = await getDoc(followRef);
+        const snap = await withRetry(() => getDoc(followRef));
         return snap.exists();
     } catch (e) {
         console.warn('Error getting follow status:', e);
@@ -25,7 +41,7 @@ export const getFollowStats = async (uid: string): Promise<FollowStats> => {
     if (!uid) return { followersCount: 0, followingCount: 0 };
     try {
         const userRef = doc(db, 'users', uid);
-        const snap = await getDoc(userRef);
+        const snap = await withRetry(() => getDoc(userRef));
         if (snap.exists()) {
             const data = snap.data();
             return {

@@ -28,7 +28,7 @@ type DrawerSection = null | 'menu' | 'editProfile' | 'accountDetails' | 'feedbac
 type ActivitySubTab = 'hyped' | 'commented' | 'saved';
 
 export default function ProfilePage() {
-    const { user, userProfile, logout, isAdmin, profileChecked } = useAuth();
+    const { user, userProfile, logout, isAdmin, profileChecked, loading: authLoading } = useAuth();
     const router = useRouter();
 
     const [activeTab, setActiveTab] = useState<'reports' | 'activity'>('reports');
@@ -96,7 +96,7 @@ export default function ProfilePage() {
 
     useEffect(() => {
         const fetchReports = async () => {
-            if (!user) return;
+            if (authLoading || !user) return;
             try {
                 const q = query(
                     collection(db, 'issues'),
@@ -106,28 +106,28 @@ export default function ProfilePage() {
                 const snapshot = await getDocs(q);
                 setMyReports(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue)));
             } catch (e) {
-                console.error(e);
+                console.error('Error fetching profile reports:', e);
             } finally {
                 setLoadingReports(false);
             }
         };
         fetchReports();
-    }, [user]);
+    }, [user, authLoading]);
 
     // Load follower stats
     useEffect(() => {
-        if (!user) return;
+        if (authLoading || !user) return;
         const fetchStats = async () => {
             const stats = await getFollowStats(user.uid);
             setFollowersCount(stats.followersCount);
             setFollowingCount(stats.followingCount);
         };
         fetchStats();
-    }, [user]);
+    }, [user, authLoading]);
 
     // Load gamification data
     useEffect(() => {
-        if (!user) return;
+        if (authLoading || !user) return;
         const fetchGamification = async () => {
             const [gData, tData] = await Promise.all([
                 getUserGamificationStats(user.uid),
@@ -147,11 +147,11 @@ export default function ProfilePage() {
             }
         };
         fetchGamification();
-    }, [user, userProfile?.city]);
+    }, [user, authLoading, userProfile?.city]);
 
     // Load activity data when activity tab is selected
     useEffect(() => {
-        if (activeTab !== 'activity' || !user) return;
+        if (activeTab !== 'activity' || authLoading || !user) return;
         let cancelled = false;
 
         const fetchActivity = async () => {
@@ -168,14 +168,14 @@ export default function ProfilePage() {
                     setSavedIssues(saved);
                 }
             } catch (e) {
-                console.error(e);
+                console.error('Error fetching profile activity:', e);
             } finally {
                 if (!cancelled) setLoadingActivity(false);
             }
         };
         fetchActivity();
         return () => { cancelled = true; };
-    }, [activeTab, user]);
+    }, [activeTab, user, authLoading]);
 
     const openEditProfile = () => {
         setEditName(user?.displayName || '');

@@ -184,7 +184,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     setTimeout(() => setupListener(retries - 1), 1000);
                 } else {
                     console.warn("Error fetching user profile:", error);
-                    // Don't mark profileChecked on error — prevents modal from falsely showing
+                    setProfileChecked(true); // MUST be true so OnboardingModal can render
                     setLoading(false);
                 }
             });

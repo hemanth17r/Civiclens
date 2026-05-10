@@ -16,6 +16,7 @@ import { clsx } from 'clsx';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import PullToRefresh from 'react-simple-pull-to-refresh';
+import SemanticOverview from '@/components/SemanticOverview';
 
 // User States:
 //   'A' = Guest (not logged in)
@@ -256,6 +257,8 @@ export default function Home() {
                         )}
                     </div>
                 </PullToRefresh>
+
+                <SemanticOverview />
             </div>
 
             <ReportIssueDialog

@@ -10,6 +10,22 @@ import {
     doc, getDoc, updateDoc, increment, serverTimestamp, Timestamp
 } from 'firebase/firestore';
 
+/**
+ * Handle Firestore permission-denied errors by retrying after a short delay.
+ * Useful for the split-second after login before auth tokens propagate.
+ */
+const withRetry = async <T>(fn: () => Promise<T>, retries = 3): Promise<T> => {
+    try {
+        return await fn();
+    } catch (e: any) {
+        if (retries > 0 && (e.code === 'permission-denied' || e.message?.includes('permissions'))) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            return withRetry(fn, retries - 1);
+        }
+        throw e;
+    }
+};
+
 // ═══════════════════════════════════════════════════════════════════════
 // LEVEL DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════
@@ -337,7 +353,7 @@ export async function getUserGamificationStats(uid: string): Promise<{
 }> {
     try {
         const userRef = doc(db, 'users', uid);
-        const snap = await getDoc(userRef);
+        const snap = await withRetry(() => getDoc(userRef));
 
         if (!snap.exists()) {
             return {

@@ -103,7 +103,7 @@ export const getIssueById = async (issueId: string): Promise<Issue | null> => {
     if (!issueId) return null;
     try {
         const issueRef = doc(db, 'issues', issueId);
-        const snap = await getDoc(issueRef);
+        const snap = await withRetry(() => getDoc(issueRef));
         if (!snap.exists()) return null;
         return { id: snap.id, ...snap.data() } as Issue;
     } catch (error) {
@@ -417,7 +417,7 @@ export const unhypeIssue = async (issueId: string, userId: string) => {
 export const hasUserHyped = async (issueId: string, userId: string) => {
     if (!issueId || !userId) return false;
     const hypeRef = doc(db, 'issues', issueId, 'hypes', userId);
-    const snap = await getDoc(hypeRef);
+    const snap = await withRetry(() => getDoc(hypeRef));
     return snap.exists();
 };
 
@@ -461,7 +461,7 @@ export const unsaveIssue = async (issueId: string, userId: string) => {
 export const hasUserSaved = async (issueId: string, userId: string) => {
     if (!issueId || !userId) return false;
     const saveRef = doc(db, 'issues', issueId, 'saves', userId);
-    const snap = await getDoc(saveRef);
+    const snap = await withRetry(() => getDoc(saveRef));
     return snap.exists();
 };
 
@@ -625,7 +625,7 @@ export const unlikeComment = async (issueId: string, commentId: string, userId: 
 export const hasUserLikedComment = async (issueId: string, commentId: string, userId: string) => {
     if (!issueId || !commentId || !userId) return false;
     const likeRef = doc(db, 'issues', issueId, 'comments', commentId, 'likes', userId);
-    const snap = await getDoc(likeRef);
+    const snap = await withRetry(() => getDoc(likeRef));
     return snap.exists();
 };
 

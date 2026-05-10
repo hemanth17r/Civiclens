@@ -4,6 +4,7 @@ import "./globals.css";
 import Shell from "@/components/Shell";
 import { AuthProvider } from "@/context/AuthContext";
 import { ToastProvider } from "@/context/ToastContext";
+import JsonLd from "@/components/JsonLd";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -54,6 +55,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} antialiased bg-background text-foreground`}>
+        <JsonLd />
         <AuthProvider>
           <ToastProvider>
             <Shell>
