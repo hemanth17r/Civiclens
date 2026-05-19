@@ -59,3 +59,7 @@ firebase-debug.*.log
 
 # Antigravity / AI agent workspace
 .gemini/
+
+# Prevent accidentally committing outer OneDrive path duplicates
+# (caused by running `git add .` from a parent directory outside the repo root)
+OneDrive/
