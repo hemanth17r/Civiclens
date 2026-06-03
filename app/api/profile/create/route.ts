@@ -53,11 +53,12 @@ export async function POST(req: NextRequest) {
                 }
 
                 // Check handle uniqueness
-                const handleSnapshot = await firestore
-                    .collection('users')
-                    .where('handle', '==', prefixedHandle)
-                    .limit(1)
-                    .get();
+                const handleSnapshot = await tx.get(
+                    firestore
+                        .collection('users')
+                        .where('handle', '==', prefixedHandle)
+                        .limit(1)
+                );
 
                 if (!handleSnapshot.empty) {
                     throw new Error('HANDLE_TAKEN');
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest) {
     } catch (err: any) {
         console.error('[/api/profile/create] Error:', err);
         return NextResponse.json(
-            { error: 'Internal server error. Please try again.' },
+            { error: `Internal server error: ${err.message}` },
             { status: 500 }
         );
     }
