@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Mail, ArrowRight, Loader2, Home } from 'lucide-react';
+import { Mail, ArrowRight, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -57,12 +57,12 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="min-h-screen flex items-center justify-center bg-white p-6">
             <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
-                className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md border border-gray-100"
+                className="w-full max-w-md"
             >
                 <div className="flex flex-col items-center text-center">
                     <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6 text-2xl border border-blue-100 shadow-sm">
@@ -133,16 +133,6 @@ export default function LoginPage() {
                             </p>
                         </div>
                     )}
-
-                    <div className="mt-8 pt-6 border-t border-gray-100 w-full flex justify-center">
-                        <button
-                            onClick={() => router.push('/')}
-                            className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-800 transition-colors cursor-pointer"
-                        >
-                            <Home size={16} />
-                            Return to Home Screen
-                        </button>
-                    </div>
                 </div>
             </motion.div>
         </div>
