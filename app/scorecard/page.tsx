@@ -65,15 +65,32 @@ export default function CityInsightsPage() {
         [resolvedIssues]
     );
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                <Loader2 className="animate-spin text-gray-400" size={32} />
-            </div>
-        );
-    }
+
 
     const renderLeaderboard = () => {
+        if (loading) {
+            return (
+                <div className="divide-y divide-gray-50">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                        <div key={i} className="p-4 flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="w-8 h-6 bg-gray-100 animate-pulse rounded" />
+                                <div className="w-10 h-10 rounded-full bg-gray-100 animate-pulse flex-shrink-0" />
+                                <div className="flex flex-col gap-1.5">
+                                    <div className="w-28 h-4 bg-gray-100 animate-pulse rounded" />
+                                    <div className="w-16 h-3 bg-gray-100 animate-pulse rounded" />
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                                <div className="w-8 h-4 bg-gray-100 animate-pulse rounded" />
+                                <div className="w-12 h-3 bg-gray-100 animate-pulse rounded" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
         if (topContributors.length === 0) {
             return <div className="p-8 text-center text-gray-400 text-sm italic py-10">No contributors yet in this city.</div>;
         }
@@ -129,6 +146,26 @@ export default function CityInsightsPage() {
     };
 
     const renderIssueList = (issues: Array<any>, emptyMessage: string, type: 'in_progress' | 'resolved') => {
+        if (loading) {
+            return (
+                <div className="divide-y divide-gray-50">
+                    {[1, 2, 3].map((i) => (
+                        <div key={i} className="p-4 flex gap-4 items-center">
+                            <div className="w-14 h-14 bg-gray-100 animate-pulse rounded-xl flex-shrink-0" />
+                            <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                                <div className="w-1/2 h-4 bg-gray-100 animate-pulse rounded" />
+                                <div className="w-1/3 h-3 bg-gray-100 animate-pulse rounded" />
+                            </div>
+                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                <div className="w-12 h-4 bg-gray-100 animate-pulse rounded" />
+                                <div className="w-10 h-3 bg-gray-100 animate-pulse rounded" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
         if (issues.length === 0) {
             return <div className="p-8 text-center text-gray-400 text-sm italic py-10">{emptyMessage}</div>;
         }
