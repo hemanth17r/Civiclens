@@ -22,8 +22,17 @@ const ConnectionsModal = dynamic(() => import('@/components/ConnectionsModal'), 
 import { getUserGamificationStats, getLevelFromXp, getXpProgress, type Badge as GBadge } from '@/lib/gamification';
 import { getUserTrustStats, getVoteWeightTier } from '@/lib/trust';
 import { getUserCityRank } from '@/lib/users';
-import { LevelBadge, XpProgressBar, TrustBadge, BadgeGrid, StreakDisplay, AchievementGallery } from '@/components/GamificationUI';
+import { LevelBadge, XpProgressBar, TrustBadge, BadgeGrid, StreakDisplay } from '@/components/GamificationUI';
 import VerifiedBadge from '@/components/VerifiedBadge';
+
+const AchievementGallery = dynamic(() => import('@/components/AchievementGallery'), {
+    ssr: false,
+    loading: () => (
+        <div className="flex items-center justify-center h-full bg-white py-12">
+            <Loader2 className="animate-spin text-blue-600" size={32} />
+        </div>
+    )
+});
 
 type DrawerSection = null | 'menu' | 'editProfile' | 'accountDetails' | 'feedback' | 'achievements';
 type ActivitySubTab = 'hyped' | 'commented' | 'saved';
@@ -42,6 +51,11 @@ export default function ProfilePage() {
     const [commentedIssues, setCommentedIssues] = useState<Issue[]>([]);
     const [savedIssues, setSavedIssues] = useState<Issue[]>([]);
     const [loadingActivity, setLoadingActivity] = useState(true);
+    const [loadedTabs, setLoadedTabs] = useState<Record<ActivitySubTab, boolean>>({
+        hyped: false,
+        commented: false,
+        saved: false
+    });
 
     // Follower Stats
     const [followersCount, setFollowersCount] = useState(0);
@@ -156,32 +170,48 @@ export default function ProfilePage() {
     }, [user, authLoading, userProfile?.city]);
 
     // Load activity data when activity tab is selected
+    // Load activity data lazily when a specific activity subtab is active
     useEffect(() => {
         if (activeTab !== 'activity' || authLoading || !user) return;
+        if (loadedTabs[activitySubTab]) {
+            setLoadingActivity(false);
+            return;
+        }
+
         let cancelled = false;
 
-        const fetchActivity = async () => {
+        const fetchTabActivity = async () => {
             setLoadingActivity(true);
             try {
-                const [hyped, commented, saved] = await Promise.all([
-                    getUserHypedIssues(user.uid),
-                    getUserCommentedIssues(user.uid),
-                    getUserSavedIssues(user.uid)
-                ]);
-                if (!cancelled) {
-                    setHypedIssues(hyped);
-                    setCommentedIssues(commented);
-                    setSavedIssues(saved);
+                if (activitySubTab === 'hyped') {
+                    const hyped = await getUserHypedIssues(user.uid);
+                    if (!cancelled) {
+                        setHypedIssues(hyped);
+                        setLoadedTabs(prev => ({ ...prev, hyped: true }));
+                    }
+                } else if (activitySubTab === 'commented') {
+                    const commented = await getUserCommentedIssues(user.uid);
+                    if (!cancelled) {
+                        setCommentedIssues(commented);
+                        setLoadedTabs(prev => ({ ...prev, commented: true }));
+                    }
+                } else if (activitySubTab === 'saved') {
+                    const saved = await getUserSavedIssues(user.uid);
+                    if (!cancelled) {
+                        setSavedIssues(saved);
+                        setLoadedTabs(prev => ({ ...prev, saved: true }));
+                    }
                 }
             } catch (e) {
-                console.error('Error fetching profile activity:', e);
+                console.error(`Error fetching profile activity for subtab ${activitySubTab}:`, e);
             } finally {
                 if (!cancelled) setLoadingActivity(false);
             }
         };
-        fetchActivity();
+
+        fetchTabActivity();
         return () => { cancelled = true; };
-    }, [activeTab, user, authLoading]);
+    }, [activeTab, activitySubTab, user, authLoading, loadedTabs]);
 
     const openEditProfile = () => {
         setEditName(user?.displayName || '');

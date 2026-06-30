@@ -21,7 +21,6 @@ interface CommentDrawerProps {
 }
 
 interface CommentWithReplies extends CommentData {
-    replies: ReplyData[];
     isLiked: boolean;
 }
 
@@ -35,6 +34,11 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
     const [loadingComments, setLoadingComments] = useState(true);
     const [sending, setSending] = useState(false);
 
+    // Lazy load state for replies
+    const [loadedReplies, setLoadedReplies] = useState<Record<string, ReplyData[]>>({});
+    const [loadingReplies, setLoadingReplies] = useState<Record<string, boolean>>({});
+    const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
+
     // Load comments from Firestore when drawer opens
     useEffect(() => {
         if (!isOpen || !issueId) return;
@@ -44,14 +48,19 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
             setLoadingComments(true);
             try {
                 const rawComments = await getComments(issueId);
-                const withReplies: CommentWithReplies[] = await Promise.all(
+                const withLikes: CommentWithReplies[] = await Promise.all(
                     rawComments.map(async (c) => {
-                        const replies = await getReplies(issueId, c.id);
                         const isLiked = user ? await hasUserLikedComment(issueId, c.id, user.uid) : false;
-                        return { ...c, replies, isLiked };
+                        return { ...c, isLiked };
                     })
                 );
-                if (!cancelled) setComments(withReplies);
+                if (!cancelled) {
+                    setComments(withLikes);
+                    // Reset replies state when comments re-load
+                    setLoadedReplies({});
+                    setLoadingReplies({});
+                    setExpandedComments({});
+                }
             } catch (e) {
                 console.error('Error loading comments:', e);
             } finally {
@@ -102,9 +111,18 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                     createdAt: null,
                     likes: 0
                 };
+                
+                // Add nested reply to local state instantly
+                setLoadedReplies(prev => ({
+                    ...prev,
+                    [replyingTo.id]: [...(prev[replyingTo.id] || []), newReply]
+                }));
+                // Auto-expand the comment's replies
+                setExpandedComments(prev => ({ ...prev, [replyingTo.id]: true }));
+                // Update UI counter
                 setComments(prev => prev.map(c => {
                     if (c.id === replyingTo.id) {
-                        return { ...c, replies: [...c.replies, newReply] };
+                        return { ...c, replyCount: (c.replyCount || 0) + 1 };
                     }
                     return c;
                 }));
@@ -122,7 +140,7 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                     text: commentText.trim(),
                     createdAt: null,
                     likes: 0,
-                    replies: [],
+                    replyCount: 0,
                     isLiked: false
                 };
                 setComments(prev => [...prev, newComment]);
@@ -155,6 +173,28 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
         } else {
             await likeComment(issueId, commentId, user.uid);
         }
+    };
+
+    const toggleReplies = async (commentId: string) => {
+        const isExpanded = expandedComments[commentId];
+        if (isExpanded) {
+            setExpandedComments(prev => ({ ...prev, [commentId]: false }));
+            return;
+        }
+
+        // Fetch replies from Firestore if they aren't loaded yet
+        if (!loadedReplies[commentId]) {
+            setLoadingReplies(prev => ({ ...prev, [commentId]: true }));
+            try {
+                const replies = await getReplies(issueId, commentId);
+                setLoadedReplies(prev => ({ ...prev, [commentId]: replies }));
+            } catch (err) {
+                console.error("Failed to load replies dynamically:", err);
+            } finally {
+                setLoadingReplies(prev => ({ ...prev, [commentId]: false }));
+            }
+        }
+        setExpandedComments(prev => ({ ...prev, [commentId]: true }));
     };
 
     return (
@@ -236,10 +276,26 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                                                 </button>
                                             </div>
 
+                                            {/* Toggle View Replies button */}
+                                            {((c.replyCount && c.replyCount > 0) || (loadedReplies[c.id] && loadedReplies[c.id].length > 0)) && (
+                                                <button
+                                                    onClick={() => toggleReplies(c.id)}
+                                                    className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-2 mb-1"
+                                                >
+                                                    {loadingReplies[c.id] ? (
+                                                        <Loader2 size={12} className="animate-spin text-gray-400" />
+                                                    ) : expandedComments[c.id] ? (
+                                                        'Hide replies'
+                                                    ) : (
+                                                        `View replies (${c.replyCount || loadedReplies[c.id]?.length || 0})`
+                                                    )}
+                                                </button>
+                                            )}
+
                                             {/* Nested Replies */}
-                                            {c.replies && c.replies.length > 0 && (
+                                            {expandedComments[c.id] && loadedReplies[c.id] && loadedReplies[c.id].length > 0 && (
                                                 <div className="mt-3 space-y-4">
-                                                    {c.replies.map(r => (
+                                                    {loadedReplies[c.id].map(r => (
                                                         <div key={r.id} className="flex gap-3">
                                                             <Link href={`/profile/${r.userId}`} className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-[10px] flex-shrink-0 mt-0.5 overflow-hidden hover:opacity-80 transition-opacity">
                                                                 {r.userAvatar ? (

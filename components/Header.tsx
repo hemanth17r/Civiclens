@@ -10,7 +10,6 @@ interface HeaderProps {
     onReportClick: () => void;
 }
 
-import ProfileDialog from '@/components/ProfileDialog';
 import AuthModule from '@/components/AuthModule';
 import NotificationBell from '@/components/NotificationBell';
 

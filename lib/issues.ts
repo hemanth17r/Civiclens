@@ -485,6 +485,7 @@ export interface CommentData {
     isOfficial?: boolean;
     isAdmin?: boolean;
     department?: string;
+    replyCount?: number;
 }
 
 export interface ReplyData {
@@ -577,6 +578,7 @@ export const addReply = async (
     avatarUrl?: string
 ) => {
     if (!issueId || !commentId || !userId || !text.trim()) return null;
+    const commentRef = doc(db, 'issues', issueId, 'comments', commentId);
     const replyData: any = {
         userId,
         userHandle: handle,
@@ -585,11 +587,28 @@ export const addReply = async (
         createdAt: serverTimestamp()
     };
     if (avatarUrl) replyData.userAvatar = avatarUrl;
-    const docRef = await addDoc(
-        collection(db, 'issues', issueId, 'comments', commentId, 'replies'),
-        replyData
-    );
-    return docRef.id;
+
+    let replyId: string | null = null;
+    try {
+        await runTransaction(db, async (t) => {
+            // Firestore transactions require reads before writes
+            const replyRef = doc(collection(db, 'issues', issueId, 'comments', commentId, 'replies'));
+            t.set(replyRef, replyData);
+            t.update(commentRef, {
+                replyCount: increment(1)
+            });
+            replyId = replyRef.id;
+        });
+        return replyId;
+    } catch (e) {
+        console.error("Failed transaction to add reply:", e);
+        // Fallback: write doc without incrementing count if transaction fails
+        const docRef = await addDoc(
+            collection(db, 'issues', issueId, 'comments', commentId, 'replies'),
+            replyData
+        );
+        return docRef.id;
+    }
 };
 
 export const getReplies = async (issueId: string, commentId: string): Promise<ReplyData[]> => {
