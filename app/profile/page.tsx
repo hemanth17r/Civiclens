@@ -16,8 +16,9 @@ import IssueCard from '@/components/IssueCard';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
+import dynamic from 'next/dynamic';
 import { INDIAN_CITIES } from '@/data/cities';
-import ConnectionsModal from '@/components/ConnectionsModal';
+const ConnectionsModal = dynamic(() => import('@/components/ConnectionsModal'), { ssr: false });
 import { getUserGamificationStats, getLevelFromXp, getXpProgress, type Badge as GBadge } from '@/lib/gamification';
 import { getUserTrustStats, getVoteWeightTier } from '@/lib/trust';
 import { getUserCityRank } from '@/lib/users';
@@ -309,7 +310,7 @@ export default function ProfilePage() {
                 <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                     <User size={40} className="text-gray-300" />
                 </div>
-                <h1 className="text-xl font-bold text-gray-900 mb-1">You're not logged in</h1>
+                <h1 className="text-xl font-bold text-gray-900 mb-1">{"You're not logged in"}</h1>
                 <p className="text-gray-500 text-sm">Sign in to see your profile and reports.</p>
             </div>
         );

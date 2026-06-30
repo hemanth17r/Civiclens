@@ -22,6 +22,11 @@ export const metadata: Metadata = {
   verification: {
     google: "08wTaMLvsSQFGFRaRQZq-E8gkXWS_pPWm8hWnc2_LaY",
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "CivicLens",
+  },
   openGraph: {
     type: "website",
     locale: "en_IN",
@@ -54,6 +59,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta name="theme-color" content="#2563eb" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                window.deferredPrompt = e;
+                window.dispatchEvent(new CustomEvent('pwa-prompt-available', { detail: e }));
+              });
+            `,
+          }}
+        />
+      </head>
       <body className={`${inter.variable} antialiased bg-background text-foreground`}>
         <JsonLd />
         <AuthProvider>

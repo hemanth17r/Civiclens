@@ -5,15 +5,17 @@ import { MapPin, Flame, MessageCircle, Bookmark, User, Share2, BookmarkCheck, Ch
 import { formatDistanceToNow } from 'date-fns';
 import { clsx } from 'clsx';
 import { Issue, hypeIssue, unhypeIssue, hasUserHyped, saveIssue, unsaveIssue, hasUserSaved } from '@/lib/issues';
-import AuthModule from './AuthModule';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 import HeartAnimation from './HeartAnimation';
-import CommentDrawer from './CommentDrawer';
-import ShareModal from './ShareModal';
 import VerifiedBadge from './VerifiedBadge';
+
+const AuthModule = dynamic(() => import('./AuthModule'), { ssr: false });
+const CommentDrawer = dynamic(() => import('./CommentDrawer'), { ssr: false });
+const ShareModal = dynamic(() => import('./ShareModal'), { ssr: false });
 
 interface IssueCardProps {
     issue: Issue;
@@ -412,7 +414,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
 
                         {issue.resolvedStatement && (
                             <div className="bg-white/60 rounded-lg p-2.5 text-sm text-gray-700 italic border border-emerald-100/50 mb-3">
-                                "{issue.resolvedStatement}"
+                                {"\""}{issue.resolvedStatement}{"\""}
                             </div>
                         )}
 

@@ -8,6 +8,7 @@ import Header from './Header';
 import BottomNav from './BottomNav';
 const ReportIssueDialog = dynamic(() => import('./ReportIssueDialog'), { ssr: false });
 const OnboardingModal = dynamic(() => import('./OnboardingModal'), { ssr: false });
+const PWAInstallPrompt = dynamic(() => import('./PWAInstallPrompt'), { ssr: false });
 import NotificationBell from './NotificationBell';
 
 interface ShellProps {
@@ -63,6 +64,7 @@ export default function Shell({ children }: ShellProps) {
             />
 
             <OnboardingModal />
+            <PWAInstallPrompt />
         </div>
     );
 }
