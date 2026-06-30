@@ -7,17 +7,24 @@ import { getNotifications, markAsRead, markAllRead, NotificationData } from '@/l
 import { formatDistanceToNow } from 'date-fns';
 import { Loader2 } from 'lucide-react';
 
+import { useRouter } from 'next/navigation';
+
 export default function NotificationsPage() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
+    const router = useRouter();
     const [notifications, setNotifications] = useState<NotificationData[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!user) return;
+        if (authLoading) return;
+        if (!user) {
+            setLoading(false);
+            return;
+        }
         getNotifications(user.uid, 50)
             .then(setNotifications)
             .finally(() => setLoading(false));
-    }, [user]);
+    }, [user, authLoading]);
 
     const handleMarkAllRead = async () => {
         if (!user) return;
@@ -87,6 +94,22 @@ export default function NotificationsPage() {
             {loading ? (
                 <div className="flex justify-center py-20">
                     <Loader2 className="animate-spin text-gray-400" size={28} />
+                </div>
+            ) : !user ? (
+                <div className="bg-white flex flex-col items-center justify-center p-6 text-center py-20 pb-32">
+                    <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-6 text-blue-600">
+                        <Bell size={32} />
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">Sign in to see notifications</h2>
+                    <p className="text-gray-500 text-sm max-w-sm mb-6">
+                        Stay updated on your reports' statuses, community consensus, and gamification rewards.
+                    </p>
+                    <button
+                        onClick={() => router.push('/login')}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-full shadow-md transition-all text-sm"
+                    >
+                        Sign In
+                    </button>
                 </div>
             ) : notifications.length === 0 ? (
                 <div className="p-16 text-center">
