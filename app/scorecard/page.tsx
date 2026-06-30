@@ -223,14 +223,14 @@ export default function CityInsightsPage() {
     return (
         <div className="min-h-screen bg-gray-50 pb-24 md:pb-4">
             {/* Hero */}
-            <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white px-6 pt-8 pb-14 shadow-md">
+            <div className="bg-blue-600 text-white px-6 pt-8 pb-14 shadow-md">
                 <div className="max-w-3xl mx-auto">
                     <div className="flex items-center gap-2 mb-1">
-                        <Map size={18} className="text-blue-200" />
-                        <span className="text-xs font-extrabold uppercase tracking-wider text-blue-200">City Insights</span>
+                        <Map size={18} className="text-blue-100" />
+                        <span className="text-xs font-extrabold uppercase tracking-wider text-blue-100">City Insights</span>
                     </div>
                     <h1 className="text-3xl font-black mt-2 tracking-tight">Civic Pulse in {userCity}</h1>
-                    <p className="text-blue-100/80 text-sm mt-1.5 font-medium">Tracking the leadership and progress within your community.</p>
+                    <p className="text-blue-50/80 text-sm mt-1.5 font-medium">Tracking the leadership and progress within your community.</p>
                 </div>
             </div>
 
