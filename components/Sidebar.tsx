@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Compass, Map, Bell, User, ChevronLeft, ChevronRight, ShieldCheck, UserPlus, LayoutDashboard } from 'lucide-react';
+import { Home, Compass, Map, Bell, User, ShieldCheck, UserPlus, LayoutDashboard } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
@@ -69,16 +69,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
             </Link>
           );
         })}
-      </div>
-
-      <div className="mt-auto p-3 border-t border-gray-200/50 flex justify-center">
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center justify-center w-10 h-10 rounded-full text-gray-700 hover:bg-gray-200/60 transition-all duration-200"
-          title={isOpen ? "Collapse Sidebar" : "Expand Sidebar"}
-        >
-          {isOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
-        </button>
       </div>
     </motion.aside>
   );
