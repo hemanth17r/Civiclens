@@ -23,7 +23,7 @@ export default function Shell({ children }: ShellProps) {
     const closeReportDialog = useCallback(() => setIsReportDialogOpen(false), []);
 
     return (
-        <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row">
+        <div className="h-screen overflow-hidden bg-[#f6f8fc] text-foreground flex flex-col md:flex-row">
             {/* Mobile: Header/Sidebar Hidden */}
             {/* Desktop: Header + Sidebar */}
 
@@ -41,17 +41,17 @@ export default function Shell({ children }: ShellProps) {
             </div>
 
             {/* Mobile Top Bar */}
-            <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-white border-b border-gray-100 h-12 px-4 flex items-center justify-between">
+            <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-[#f6f8fc] h-12 px-4 flex items-center justify-between border-b border-gray-200/50">
                 <span className="text-lg font-semibold text-gray-900">CivicLens</span>
                 <NotificationBell />
             </div>
 
             {/* Main Content Area */}
-            {/* Mobile: Full width, padding bottom for Nav */}
-            {/* Desktop: Padding top for Header, Flex grow */}
-            <main className="flex-1 w-full min-h-screen pb-20 pt-12 md:pb-0 md:pt-16 transition-all duration-300">
-                <div className="h-full w-full">
-                    {children}
+            <main className="flex-1 w-full h-full pb-20 pt-12 md:pb-4 md:pt-16 md:pr-4 md:pl-1 transition-all duration-300 flex flex-col min-h-0">
+                <div className="flex-1 bg-white rounded-t-[24px] md:rounded-[24px] border border-gray-200/50 shadow-sm overflow-hidden flex flex-col min-h-0">
+                    <div className="flex-1 overflow-y-auto min-h-0">
+                        {children}
+                    </div>
                 </div>
             </main>
 

@@ -35,11 +35,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       animate={{ width: isOpen ? 256 : 72 }}
       transition={{ type: 'spring', stiffness: 400, damping: 40 }}
       className={clsx(
-        "bg-white border-r border-gray-200 flex flex-col h-full overflow-hidden",
+        "bg-[#f6f8fc] flex flex-col h-full overflow-hidden",
         "relative"
       )}
     >
-      <div className="flex flex-col gap-2 p-3">
+      <div className="flex flex-col gap-1.5 p-3">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           const isSpecial = item.href === '/official' || item.href === '/admin/add-official' || item.href === '/admin/dashboard';
@@ -48,21 +48,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
               key={item.href}
               href={item.href}
               className={clsx(
-                "flex items-center gap-4 px-4 py-3 rounded-2xl transition-colors min-w-max",
+                "flex items-center gap-4 px-5 py-3.5 rounded-full transition-all duration-200 min-w-max",
                 isSpecial
                   ? isActive
-                    ? "bg-blue-50 text-blue-700 font-medium"
-                    : "text-blue-600 hover:bg-blue-50 border border-blue-200"
+                    ? "bg-blue-100 text-blue-900 font-bold"
+                    : "text-blue-600 hover:bg-blue-50 border border-blue-200/40"
                   : isActive
-                    ? "bg-blue-50 text-blue-700 font-medium"
-                    : "text-gray-700 hover:bg-gray-100"
+                    ? "bg-blue-100 text-blue-900 font-bold"
+                    : "text-gray-700 hover:bg-gray-200/60"
               )}
             >
-              <item.icon size={24} strokeWidth={isActive ? 2.5 : 2} />
+              <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} />
               <motion.span
                 animate={{ opacity: isOpen ? 1 : 0, display: isOpen ? "block" : "none" }}
-                transition={{ duration: 0.2 }}
-                className="whitespace-nowrap"
+                transition={{ duration: 0.15 }}
+                className="whitespace-nowrap text-sm font-medium"
               >
                 {item.name}
               </motion.span>
@@ -71,12 +71,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
         })}
       </div>
 
-      <div className="mt-auto p-3 border-t border-gray-100">
+      <div className="mt-auto p-3 border-t border-gray-200/50">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-4 px-4 py-3 rounded-2xl text-gray-700 hover:bg-gray-100 w-full"
+          className="flex items-center gap-4 px-5 py-3 rounded-full text-gray-700 hover:bg-gray-200/60 w-full transition-all duration-200 text-sm font-medium"
         >
-          {isOpen ? <ChevronLeft size={24} /> : <ChevronRight size={24} />}
+          {isOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
           {isOpen && <span>Collapse</span>}
         </button>
       </div>

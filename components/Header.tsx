@@ -19,7 +19,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, onReportClick }) => {
 
     return (
         <>
-            <header className="h-16 bg-white border-b border-gray-200 flex items-center px-4 justify-between fixed top-0 left-0 right-0 z-30">
+            <header className="h-16 bg-[#f6f8fc] flex items-center px-6 justify-between fixed top-0 left-0 right-0 z-30">
                 <div className="flex items-center gap-4 w-64">
                     <button onClick={toggleSidebar} className="p-2 hover:bg-gray-100 rounded-full text-gray-600">
                         <Menu size={24} />
