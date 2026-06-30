@@ -11,7 +11,7 @@ const ReportIssueDialog = dynamic(() => import('@/components/ReportIssueDialog')
 const AuthModule = dynamic(() => import('@/components/AuthModule'), { ssr: false });
 import { useRouter } from 'next/navigation';
 import Script from 'next/script';
-import { RotateCw, ArrowRight } from 'lucide-react';
+import { RotateCw, ArrowRight, MapPin } from 'lucide-react';
 import { clsx } from 'clsx';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -191,8 +191,9 @@ export default function Home() {
                     {(() => {
                         const cityName = user ? userProfile?.city : 'Delhi';
                         return cityName ? (
-                            <p className="text-xs text-gray-400 font-medium">
-                                📍 <span className="font-semibold text-gray-500">{cityName}</span>{' '}
+                            <p className="text-xs text-gray-400 font-medium flex items-center gap-1.5">
+                                <MapPin size={14} className="text-blue-500/70" />
+                                <span className="font-semibold text-gray-500">{cityName}</span>{' '}
                                 <span className="font-normal">& nearby</span>
                             </p>
                         ) : <span />;
@@ -201,8 +202,8 @@ export default function Home() {
 
                 {/* City nudge — shown when logged-in user hasn't set a city */}
                 {user && !userProfile?.city && !authLoading && (
-                    <div className="mb-6 bg-blue-50 border border-blue-100 rounded-2xl p-5 text-center">
-                        <p className="text-2xl mb-2">📍</p>
+                    <div className="mb-6 bg-blue-50 border border-blue-100 rounded-2xl p-5 text-center flex flex-col items-center">
+                        <MapPin className="text-blue-500 mb-2 animate-bounce" size={28} />
                         <h3 className="text-sm font-bold text-gray-900 mb-1">Set your city to see your local feed</h3>
                         <p className="text-xs text-gray-500 mb-4">
                             We'll show you issues from your city and 5 nearby areas.

@@ -1062,17 +1062,13 @@ export interface UserSearchResult {
 
 export const searchUsers = async (searchQuery: string): Promise<UserSearchResult[]> => {
     if (!searchQuery || searchQuery.length < 2) return [];
-    const normalised = searchQuery.startsWith('@') ? searchQuery : `@${searchQuery}`;
-    const end = normalised.slice(0, -1) + String.fromCharCode(normalised.charCodeAt(normalised.length - 1) + 1);
     try {
         const q = query(
             collection(db, 'users'),
-            where('handle', '>=', normalised.toLowerCase()),
-            where('handle', '<', end.toLowerCase()),
-            limit(10)
+            limit(200)
         );
         const snapshot = await withRetry(() => getDocs(q));
-        return snapshot.docs.map(d => {
+        const allUsers = snapshot.docs.map(d => {
             const data = d.data();
             return {
                 uid: d.id,
@@ -1081,6 +1077,18 @@ export const searchUsers = async (searchQuery: string): Promise<UserSearchResult
                 photoURL: data.photoURL || ''
             };
         });
+
+        const cleanQuery = searchQuery.trim().toLowerCase();
+        // Extract search term without '@' prefix to match on either handle or display name
+        const cleanQueryNoAt = cleanQuery.startsWith('@') ? cleanQuery.slice(1) : cleanQuery;
+
+        return allUsers.filter(u => {
+            const handleNoAt = u.handle.startsWith('@') ? u.handle.slice(1) : u.handle;
+            return (
+                handleNoAt.toLowerCase().includes(cleanQueryNoAt) ||
+                u.displayName.toLowerCase().includes(cleanQueryNoAt)
+            );
+        }).slice(0, 10);
     } catch (error) {
         console.warn("Error searching users:", error);
         return [];

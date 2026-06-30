@@ -78,25 +78,20 @@ export default function ShareModal({ isOpen, onClose, issueId, issueTitle }: Sha
                     />
 
                     <motion.div
-                        initial={{ y: "100%" }}
-                        animate={{ y: 0 }}
-                        exit={{ y: "100%" }}
-                        transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                        className="fixed bottom-0 left-0 right-0 bg-white z-[90] rounded-t-3xl shadow-xl pb-10"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.2 }}
+                        className="fixed inset-0 m-auto z-[90] w-[90%] max-w-sm h-fit bg-white rounded-3xl shadow-2xl border border-gray-100 p-6"
                     >
-                        {/* Handle */}
-                        <div className="w-full flex justify-center pt-3 pb-2" onClick={onClose}>
-                            <div className="w-12 h-1.5 bg-gray-200 rounded-full cursor-pointer"></div>
-                        </div>
-
-                        <div className="px-6 py-2 border-b border-gray-100 flex items-center justify-between">
-                            <h3 className="font-bold text-lg text-gray-900">Share</h3>
+                        <div className="pb-4 border-b border-gray-100 flex items-center justify-between">
+                            <h3 className="font-black text-lg text-gray-900">Share</h3>
                             <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                                 <X size={20} className="text-gray-500" />
                             </button>
                         </div>
 
-                        <div className="p-6 pt-4">
+                        <div className="pt-6">
                             {/* Social Grid */}
                             <div className="flex justify-around">
                                 {/* Standard Share Links */}

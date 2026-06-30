@@ -71,13 +71,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
         })}
       </div>
 
-      <div className="mt-auto p-3 border-t border-gray-200/50">
+      <div className="mt-auto p-3 border-t border-gray-200/50 flex justify-center">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-4 px-5 py-3 rounded-full text-gray-700 hover:bg-gray-200/60 w-full transition-all duration-200 text-sm font-medium"
+          className="flex items-center justify-center w-10 h-10 rounded-full text-gray-700 hover:bg-gray-200/60 transition-all duration-200"
+          title={isOpen ? "Collapse Sidebar" : "Expand Sidebar"}
         >
           {isOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
-          {isOpen && <span>Collapse</span>}
         </button>
       </div>
     </motion.aside>
