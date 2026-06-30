@@ -114,6 +114,22 @@ export const getIssueById = async (issueId: string): Promise<Issue | null> => {
 
 import { INDIAN_CITIES } from "@/data/cities";
 
+// ── Module-level constant: avoids rebuilding on every createIssue call ──────
+const CATEGORY_TO_DEPT: Record<string, string> = {
+    'Waste & Trash': 'Sanitation',
+    'Water Flow': 'Water Supply',
+    'Lighting': 'Electrical',
+    'Roads & Transport': 'Public Works',
+    'Flora': 'Horticulture',
+    'Noise & Smell': 'Pollution Control',
+    'Animals': 'Veterinary',
+    'Security': 'Public Safety'
+};
+
+// ── Neighbour cache: expensive Haversine computation only runs once per city ─
+// Key = city name, Value = array of 5 nearest city names (already computed)
+const _neighborCache = new Map<string, string[]>();
+
 // Helper: Calculate Distance (Haversine)
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
     var R = 6371; // Radius of the earth in km
@@ -141,16 +157,22 @@ export const getFeedIssues = async (
         // 1. Identify user city & 5 nearest neighbours (city + 5 = 6 total)
         const userCity = INDIAN_CITIES.find(c => c.name === userCityName) || INDIAN_CITIES[1];
 
-        const neighbors = INDIAN_CITIES
-            .filter(c => c.name !== userCity.name)
-            .map(c => ({
-                ...c,
-                distance: getDistanceFromLatLonInKm(userCity.lat, userCity.lng, c.lat, c.lng)
-            }))
-            .sort((a, b) => a.distance - b.distance)
-            .slice(0, 5); // ← 5 nearest neighbours only
+        // Use cached neighbours if available — avoids 189 Haversine calculations on repeat calls
+        let cachedNeighborNames = _neighborCache.get(userCity.name);
+        if (!cachedNeighborNames) {
+            const neighbors = INDIAN_CITIES
+                .filter(c => c.name !== userCity.name)
+                .map(c => ({
+                    name: c.name,
+                    distance: getDistanceFromLatLonInKm(userCity.lat, userCity.lng, c.lat, c.lng)
+                }))
+                .sort((a, b) => a.distance - b.distance)
+                .slice(0, 5);
+            cachedNeighborNames = neighbors.map(n => n.name);
+            _neighborCache.set(userCity.name, cachedNeighborNames);
+        }
 
-        const targetCities = [userCity.name, ...neighbors.map(n => n.name)];
+        const targetCities = [userCity.name, ...cachedNeighborNames];
 
         // 2. Query the local cluster (Firestore 'in' supports up to 10 values — we use 6)
         const localQuery = query(
@@ -283,21 +305,7 @@ export const createIssue = async (data: IssueData) => {
         }
 
         // --- Smart Triage: Category to Department Mapping ---
-        let assignedDepartment = 'General';
-        const categoryMap: Record<string, string> = {
-            'Waste & Trash': 'Sanitation',
-            'Water Flow': 'Water Supply',
-            'Lighting': 'Electrical',
-            'Roads & Transport': 'Public Works',
-            'Flora': 'Horticulture',
-            'Noise & Smell': 'Pollution Control',
-            'Animals': 'Veterinary',
-            'Security': 'Public Safety'
-        };
-
-        if (data.category) {
-            assignedDepartment = categoryMap[data.category] || 'General';
-        }
+        const assignedDepartment = data.category ? (CATEGORY_TO_DEPT[data.category] || 'General') : 'General';
 
         const docRef = await addDoc(collection(db, "issues"), {
             ...data,

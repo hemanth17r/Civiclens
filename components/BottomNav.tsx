@@ -17,7 +17,7 @@ const navItems = [
     { name: 'Profile', href: '/profile', icon: User },
 ];
 
-export default function BottomNav({ onReportClick }: BottomNavProps) {
+function BottomNav({ onReportClick }: BottomNavProps) {
     const pathname = usePathname();
 
     return (
@@ -62,3 +62,7 @@ export default function BottomNav({ onReportClick }: BottomNavProps) {
         </div>
     );
 }
+
+// Memoized: Shell owns isReportDialogOpen state; without memo, every dialog
+// open/close re-renders BottomNav even though its props never changed.
+export default React.memo(BottomNav);

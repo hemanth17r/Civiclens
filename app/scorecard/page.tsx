@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import {
@@ -42,6 +42,28 @@ export default function CityInsightsPage() {
         }).catch(console.error)
             .finally(() => setLoading(false));
     }, [userCity]);
+
+    // Pre-compute time strings outside the render loop — formatDistanceToNow is
+    // a date-fns parse+format operation that should not run per-render inside .map()
+    const enrichedInProgress = useMemo(() =>
+        inProgressIssues.map(issue => ({
+            ...issue,
+            _age: formatDistanceToNow(new Date(issue.createdAt?.toMillis?.() || Date.now()), { addSuffix: true }),
+        })),
+        [inProgressIssues]
+    );
+
+    const enrichedResolved = useMemo(() =>
+        resolvedIssues.map(issue => {
+            const resolvedMs = issue.resolvedAt?.toMillis?.();
+            return {
+                ...issue,
+                _age: formatDistanceToNow(new Date(issue.createdAt?.toMillis?.() || Date.now()), { addSuffix: true }),
+                _resolvedAge: resolvedMs ? formatDistanceToNow(new Date(resolvedMs), { addSuffix: true }) : null,
+            };
+        }),
+        [resolvedIssues]
+    );
 
     if (loading) {
         return (
@@ -106,7 +128,7 @@ export default function CityInsightsPage() {
         );
     };
 
-    const renderIssueList = (issues: Issue[], emptyMessage: string, type: 'in_progress' | 'resolved') => {
+    const renderIssueList = (issues: Array<any>, emptyMessage: string, type: 'in_progress' | 'resolved') => {
         if (issues.length === 0) {
             return <div className="p-8 text-center text-gray-400 text-sm italic py-10">{emptyMessage}</div>;
         }
@@ -114,10 +136,8 @@ export default function CityInsightsPage() {
         return (
             <div className="divide-y divide-gray-50">
                 {issues.map(issue => {
-                    const createdMs = issue.createdAt?.toMillis?.() || Date.now();
-                    const age = formatDistanceToNow(new Date(createdMs), { addSuffix: true });
-                    const resolvedMs = issue.resolvedAt?.toMillis?.();
-                    const resolvedAge = resolvedMs ? formatDistanceToNow(new Date(resolvedMs), { addSuffix: true }) : null;
+                    const age = issue._age;
+                    const resolvedAge = issue._resolvedAge ?? null;
 
                     return (
                         <div
@@ -200,7 +220,7 @@ export default function CityInsightsPage() {
                         </div>
                         <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">Top 5</span>
                     </div>
-                    {renderIssueList(inProgressIssues, `No issues are currently marked as Active in ${userCity}.`, 'in_progress')}
+                    {renderIssueList(enrichedInProgress, `No issues are currently marked as Active in ${userCity}.`, 'in_progress')}
                 </div>
 
                 {/* ── TOP RESOLVED ─────────────────────── */}
@@ -212,7 +232,7 @@ export default function CityInsightsPage() {
                         </div>
                         <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">Top 5</span>
                     </div>
-                    {renderIssueList(resolvedIssues, `No recently resolved issues in ${userCity}.`, 'resolved')}
+                    {renderIssueList(enrichedResolved, `No recently resolved issues in ${userCity}.`, 'resolved')}
                 </div>
 
                 <div className="text-center pb-8 pt-4">

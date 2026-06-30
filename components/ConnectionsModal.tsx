@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, UserCircle2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -105,9 +105,12 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
 
     if (!isOpen) return null;
 
-    const filteredUsers = users.filter(u =>
-        (u.displayName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (u.handle || '').toLowerCase().includes(searchQuery.toLowerCase())
+    const filteredUsers = useMemo(() =>
+        users.filter(u =>
+            (u.displayName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (u.handle || '').toLowerCase().includes(searchQuery.toLowerCase())
+        ),
+        [users, searchQuery]
     );
 
     return (

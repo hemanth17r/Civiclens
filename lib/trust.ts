@@ -54,15 +54,25 @@ export const VOTE_WEIGHT_TIERS = [
 // CORE FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════
 
-/** Get the vote weight tier for a given trust score */
+// Module-level cache keyed on trust score rounded to 2dp.
+// Max 101 entries (0.00–1.00) — negligible memory, eliminates repeated linear scans.
+const _voteWeightTierCache = new Map<number, typeof VOTE_WEIGHT_TIERS[number]>();
+
+/** Get the vote weight tier for a given trust score (memoized) */
 export function getVoteWeightTier(trustScore: number) {
-    const clamped = Math.max(TRUST_MIN, Math.min(TRUST_MAX, trustScore));
+    const key = Math.round(Math.max(TRUST_MIN, Math.min(TRUST_MAX, trustScore)) * 100);
+    const cached = _voteWeightTierCache.get(key);
+    if (cached) return cached;
+    const clamped = key / 100;
+    let result: typeof VOTE_WEIGHT_TIERS[number] = VOTE_WEIGHT_TIERS[0];
     for (let i = VOTE_WEIGHT_TIERS.length - 1; i >= 0; i--) {
         if (clamped >= VOTE_WEIGHT_TIERS[i].minTrust) {
-            return VOTE_WEIGHT_TIERS[i];
+            result = VOTE_WEIGHT_TIERS[i];
+            break;
         }
     }
-    return VOTE_WEIGHT_TIERS[0];
+    _voteWeightTierCache.set(key, result);
+    return result;
 }
 
 /** Get vote weight for a trust score, with optional confidence scaling based on total prior votes */

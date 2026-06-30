@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, Trophy, Award, Lock, CheckCircle2, ChevronRight, Milestone, Star } from 'lucide-react';
 import { BADGES, CIVIC_LEVELS, type Badge } from '@/lib/gamification';
@@ -18,7 +18,7 @@ interface XpToastProps {
     onDone: () => void;
 }
 
-export function XpToast({ xp, label, leveledUp, newLevelTitle, newBadges, onDone }: XpToastProps) {
+export const XpToast = React.memo(function XpToast({ xp, label, leveledUp, newLevelTitle, newBadges, onDone }: XpToastProps) {
     useEffect(() => {
         const timer = setTimeout(onDone, 3500);
         return () => clearTimeout(timer);
@@ -70,10 +70,8 @@ export function XpToast({ xp, label, leveledUp, newLevelTitle, newBadges, onDone
             </div>
         </motion.div>
     );
-}
+});
 
-// ═══════════════════════════════════════════════════════════════════════
-// XP PROGRESS BAR — for profile page
 // ═══════════════════════════════════════════════════════════════════════
 
 interface XpProgressBarProps {
@@ -85,7 +83,7 @@ interface XpProgressBarProps {
     currentLevel?: number;
 }
 
-export function XpProgressBar({ xp, progress, currentLevelXp, nextLevelXp, levelColor, currentLevel }: XpProgressBarProps) {
+export const XpProgressBar = React.memo(function XpProgressBar({ xp, progress, currentLevelXp, nextLevelXp, levelColor, currentLevel }: XpProgressBarProps) {
     const isMax = nextLevelXp <= currentLevelXp;
     
     return (
@@ -114,7 +112,7 @@ export function XpProgressBar({ xp, progress, currentLevelXp, nextLevelXp, level
             </div>
         </div>
     );
-}
+});
 
 // ═══════════════════════════════════════════════════════════════════════
 // TRUST BADGE — small indicator for trust tier
@@ -127,7 +125,7 @@ interface TrustBadgeProps {
     size?: 'sm' | 'md';
 }
 
-export function TrustBadge({ trustScore, tierName, tierColor, size = 'sm' }: TrustBadgeProps) {
+export const TrustBadge = React.memo(function TrustBadge({ trustScore, tierName, tierColor, size = 'sm' }: TrustBadgeProps) {
     const sizeClasses = size === 'sm'
         ? 'text-[10px] px-2 py-0.5'
         : 'text-xs px-3 py-1';
@@ -141,7 +139,7 @@ export function TrustBadge({ trustScore, tierName, tierColor, size = 'sm' }: Tru
             {tierName}
         </span>
     );
-}
+});
 
 // ═══════════════════════════════════════════════════════════════════════
 // LEVEL BADGE — shown on profile
@@ -155,7 +153,7 @@ interface LevelBadgeProps {
     size?: 'sm' | 'lg';
 }
 
-export function LevelBadge({ level, title, emoji, color, size = 'sm' }: LevelBadgeProps) {
+export const LevelBadge = React.memo(function LevelBadge({ level, title, emoji, color, size = 'sm' }: LevelBadgeProps) {
     if (size === 'lg') {
         return (
             <div className="flex items-center gap-2">
@@ -181,7 +179,7 @@ export function LevelBadge({ level, title, emoji, color, size = 'sm' }: LevelBad
             {emoji} Lv.{level} {title}
         </span>
     );
-}
+});
 
 // ═══════════════════════════════════════════════════════════════════════
 // BADGE GRID — for profile page
@@ -191,7 +189,7 @@ interface BadgeGridProps {
     badges: Badge[];
 }
 
-export function BadgeGrid({ badges }: BadgeGridProps) {
+export const BadgeGrid = React.memo(function BadgeGrid({ badges }: BadgeGridProps) {
     if (badges.length === 0) {
         return (
             <div className="text-center py-6 text-gray-400 text-sm">
@@ -220,7 +218,7 @@ export function BadgeGrid({ badges }: BadgeGridProps) {
             ))}
         </div>
     );
-}
+});
 
 // ═══════════════════════════════════════════════════════════════════════
 // STREAK DISPLAY — for profile page
@@ -231,7 +229,7 @@ interface StreakDisplayProps {
     longestStreak: number;
 }
 
-export function StreakDisplay({ currentStreak, longestStreak }: StreakDisplayProps) {
+export const StreakDisplay = React.memo(function StreakDisplay({ currentStreak, longestStreak }: StreakDisplayProps) {
     return (
         <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -251,7 +249,7 @@ export function StreakDisplay({ currentStreak, longestStreak }: StreakDisplayPro
             </div>
         </div>
     );
-}
+});
 
 // ═══════════════════════════════════════════════════════════════════════
 // ACHIEVEMENT GALLERY — "Duolingo-style" journey view
@@ -267,7 +265,7 @@ interface AchievementGalleryProps {
     totalVerifications: number;
 }
 
-export function AchievementGallery({
+export const AchievementGallery = React.memo(function AchievementGallery({
     userXp,
     userLevel,
     unlockedBadges,
@@ -276,11 +274,12 @@ export function AchievementGallery({
     totalReports,
     totalVerifications
 }: AchievementGalleryProps) {
-    const unlockedIds = new Set(unlockedBadges.map(b => b.id));
-    const allBadgesList = Object.values(BADGES);
+    // Memoize derived sets/arrays — rebuilt only when their inputs change.
+    const unlockedIds = useMemo(() => new Set(unlockedBadges.map(b => b.id)), [unlockedBadges]);
+    const allBadgesList = useMemo(() => Object.values(BADGES), []);
 
-    // Some predefined milestone cards
-    const milestones = [
+    // Memoized milestone cards — recalculated only when the user's progress values change.
+    const milestones = useMemo(() => [
         {
             id: 'level_5',
             title: 'Changemaker',
@@ -331,7 +330,7 @@ export function AchievementGallery({
             achieved: totalVerifications >= 100,
             progress: Math.min(100, (totalVerifications / 100) * 100)
         }
-    ];
+    ], [userLevel, longestStreak, totalReports, totalVerifications]);
 
     return (
         <div className="flex flex-col h-full bg-white">
@@ -461,5 +460,5 @@ export function AchievementGallery({
             </div>
         </div>
     );
-}
+});
 

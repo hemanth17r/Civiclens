@@ -129,33 +129,50 @@ export const BADGES: Record<string, Badge> = {
 // CORE FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════
 
-/** Get level info from XP amount */
+// Module-level cache: XP -> level info. Safe because CIVIC_LEVELS is static.
+const _levelFromXpCache = new Map<number, typeof CIVIC_LEVELS[number]>();
+
+/** Get level info from XP amount (memoized) */
 export function getLevelFromXp(xp: number): typeof CIVIC_LEVELS[number] {
+    const key = Math.floor(xp);
+    const cached = _levelFromXpCache.get(key);
+    if (cached) return cached;
+    let result: typeof CIVIC_LEVELS[number] = CIVIC_LEVELS[0];
     for (let i = CIVIC_LEVELS.length - 1; i >= 0; i--) {
-        if (xp >= CIVIC_LEVELS[i].minXp) {
-            return CIVIC_LEVELS[i];
+        if (key >= CIVIC_LEVELS[i].minXp) {
+            result = CIVIC_LEVELS[i];
+            break;
         }
     }
-    return CIVIC_LEVELS[0];
+    _levelFromXpCache.set(key, result);
+    return result;
 }
 
-/** Get XP progress towards next level (0.0 - 1.0) */
+// Module-level cache: XP -> progress. Safe because level thresholds are static.
+const _xpProgressCache = new Map<number, { progress: number; currentLevelXp: number; nextLevelXp: number }>();
+
+/** Get XP progress towards next level (0.0 - 1.0) (memoized) */
 export function getXpProgress(xp: number): { progress: number; currentLevelXp: number; nextLevelXp: number } {
-    const current = getLevelFromXp(xp);
+    const key = Math.floor(xp);
+    const cached = _xpProgressCache.get(key);
+    if (cached) return cached;
+    const current = getLevelFromXp(key);
     const nextIndex = CIVIC_LEVELS.findIndex(l => l.level === current.level) + 1;
-
+    let result: { progress: number; currentLevelXp: number; nextLevelXp: number };
     if (nextIndex >= CIVIC_LEVELS.length) {
-        return { progress: 1.0, currentLevelXp: current.minXp, nextLevelXp: current.minXp };
+        result = { progress: 1.0, currentLevelXp: current.minXp, nextLevelXp: current.minXp };
+    } else {
+        const next = CIVIC_LEVELS[nextIndex];
+        const range = next.minXp - current.minXp;
+        const earned = key - current.minXp;
+        result = {
+            progress: Math.min(1.0, earned / range),
+            currentLevelXp: current.minXp,
+            nextLevelXp: next.minXp,
+        };
     }
-
-    const next = CIVIC_LEVELS[nextIndex];
-    const range = next.minXp - current.minXp;
-    const earned = xp - current.minXp;
-    return {
-        progress: Math.min(1.0, earned / range),
-        currentLevelXp: current.minXp,
-        nextLevelXp: next.minXp,
-    };
+    _xpProgressCache.set(key, result);
+    return result;
 }
 
 // ═══════════════════════════════════════════════════════════════════════

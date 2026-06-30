@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { MapPin, Flame, MessageCircle, Bookmark, User, Share2, BookmarkCheck, CheckCircle, Info } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { clsx } from 'clsx';
@@ -89,33 +89,38 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
         return () => { cancelled = true; };
     }, [user, issue.id]);
 
-    // Helpers
-    const timeAgo = issue.createdAt
-        ? formatDistanceToNow(issue.createdAt.toDate(), { addSuffix: true })
-        : 'Just now';
+    // Helpers — memoized to avoid recomputation on every render.
+    // formatDistanceToNow is non-trivial; memoizing by timestamp avoids the call except on data changes.
+    const timeAgo = useMemo(
+        () => issue.createdAt
+            ? formatDistanceToNow(issue.createdAt.toDate(), { addSuffix: true })
+            : 'Just now',
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [issue.createdAt]
+    );
 
-    const getStatusColor = (status: string = 'Open') => {
-        switch (status) {
+    const statusColor = useMemo(() => {
+        switch (issue.status) {
             case 'Resolved': return 'bg-[#34A853] text-white';
             case 'Action Seen':
             case 'In Progress': return 'bg-[#FBBC05] text-white';
             case 'Active':
-            case 'Verified': return 'bg-blue-600 text-white'; // Verified is legacy, treated as Active
+            case 'Verified': return 'bg-blue-600 text-white';
             case 'Verification Needed':
             case 'Under Review': return 'bg-purple-600 text-white';
             case 'Reported':
             case 'Open': default: return 'bg-black text-white';
         }
-    };
+    }, [issue.status]);
 
-    const getDisplayStatus = (status: string = 'Open') => {
-        switch (status) {
+    const displayStatus = useMemo(() => {
+        switch (issue.status) {
             case 'Open': return 'Reported';
             case 'Under Review': return 'Verification Needed';
             case 'In Progress': return 'Active';
-            default: return status;
+            default: return issue.status;
         }
-    };
+    }, [issue.status]);
 
     const handleHype = useCallback(async () => {
         if (!user) {
@@ -290,9 +295,9 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                         onClick={handleStatusClick}
                         className={clsx(
                             "px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md backdrop-blur-md transition-all active:scale-95 border border-white/20 flex items-center gap-1 cursor-pointer hover:opacity-90",
-                            getStatusColor(issue.status)
+                            statusColor
                         )}>
-                        {getDisplayStatus(issue.status)}
+                        {displayStatus}
                     </button>
                     {/* Pending Approval Badge */}
                     {issue.status === 'Reported' && (
@@ -461,4 +466,4 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
     );
 };
 
-export default IssueCard;
+export default React.memo(IssueCard);

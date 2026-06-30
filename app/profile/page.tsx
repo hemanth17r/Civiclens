@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import {
     User, FileText, Heart, Menu, X, LogOut,
@@ -17,7 +17,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
 import dynamic from 'next/dynamic';
-import { INDIAN_CITIES } from '@/data/cities';
+import { INDIAN_CITIES_SORTED_BY_TIER } from '@/data/cities';
 const ConnectionsModal = dynamic(() => import('@/components/ConnectionsModal'), { ssr: false });
 import { getUserGamificationStats, getLevelFromXp, getXpProgress, type Badge as GBadge } from '@/lib/gamification';
 import { getUserTrustStats, getVoteWeightTier } from '@/lib/trust';
@@ -89,11 +89,16 @@ export default function ProfilePage() {
     } | null>(null);
     const [cityRank, setCityRank] = useState<number>(0);
 
-    const filteredCities = citySearch === ''
-        ? INDIAN_CITIES.sort((a, b) => a.tier - b.tier).slice(0, 8)
-        : INDIAN_CITIES.filter(c =>
-            c.name.toLowerCase().includes(citySearch.toLowerCase())
+    // filteredCities: recomputed only when citySearch changes
+    // Uses INDIAN_CITIES_SORTED_BY_TIER (pre-sorted at module load) to avoid
+    // a repeated O(n log n) sort and prevent accidental mutation of the original array.
+    const filteredCities = useMemo(() => {
+        if (citySearch === '') return INDIAN_CITIES_SORTED_BY_TIER.slice(0, 8);
+        const q = citySearch.toLowerCase();
+        return INDIAN_CITIES_SORTED_BY_TIER.filter(c =>
+            c.name.toLowerCase().includes(q)
         ).slice(0, 8);
+    }, [citySearch]);
 
     useEffect(() => {
         const fetchReports = async () => {
@@ -278,30 +283,30 @@ export default function ProfilePage() {
     const handle = rawHandle.startsWith('@') ? rawHandle : (rawHandle ? `@${rawHandle}` : '—');
     const city = userProfile?.city || '';
 
-    // Get current activity list
-    const getActivityList = () => {
+    // Memoized derived activity values — recomputed only when the relevant state changes.
+    const activityList = useMemo(() => {
         switch (activitySubTab) {
             case 'hyped': return hypedIssues;
             case 'commented': return commentedIssues;
             case 'saved': return savedIssues;
         }
-    };
+    }, [activitySubTab, hypedIssues, commentedIssues, savedIssues]);
 
-    const getActivityEmptyMessage = () => {
+    const activityEmptyMessage = useMemo(() => {
         switch (activitySubTab) {
             case 'hyped': return { title: 'No hyped posts', desc: 'Hype issues to support your community.' };
             case 'commented': return { title: 'No commented posts', desc: 'Comment on issues to start conversations.' };
             case 'saved': return { title: 'No saved posts', desc: 'Save issues to revisit them later.' };
         }
-    };
+    }, [activitySubTab]);
 
-    const getActivityEmptyIcon = () => {
+    const activityEmptyIcon = useMemo(() => {
         switch (activitySubTab) {
             case 'hyped': return <Flame size={28} strokeWidth={1.5} />;
             case 'commented': return <MessageCircle size={28} strokeWidth={1.5} />;
             case 'saved': return <Bookmark size={28} strokeWidth={1.5} />;
         }
-    };
+    }, [activitySubTab]);
 
     // ── Guest ─────────────────────────────────────────────────────────────────
     if (!user) {
@@ -562,17 +567,17 @@ export default function ProfilePage() {
                             <div className="flex justify-center py-16">
                                 <Loader2 className="animate-spin text-blue-400" size={28} />
                             </div>
-                        ) : getActivityList().length > 0 ? (
+                        ) : activityList.length > 0 ? (
                             <div className="space-y-5">
-                                {getActivityList().map((r) => <IssueCard key={r.id} issue={r} />)}
+                                {activityList.map((r) => <IssueCard key={r.id} issue={r} />)}
                             </div>
                         ) : (
                             <div className="text-center py-16">
                                 <div className="w-16 h-16 rounded-full border-2 border-gray-200 flex items-center justify-center mx-auto mb-3 text-gray-300">
-                                    {getActivityEmptyIcon()}
+                                    {activityEmptyIcon}
                                 </div>
-                                <h3 className="text-xl font-bold text-gray-800">{getActivityEmptyMessage().title}</h3>
-                                <p className="text-gray-500 text-sm mt-1">{getActivityEmptyMessage().desc}</p>
+                                <h3 className="text-xl font-bold text-gray-800">{activityEmptyMessage.title}</h3>
+                                <p className="text-gray-500 text-sm mt-1">{activityEmptyMessage.desc}</p>
                             </div>
                         )}
                     </>

@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import BottomNav from './BottomNav';
@@ -19,6 +19,9 @@ export default function Shell({ children }: ShellProps) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
 
+    const openReportDialog = useCallback(() => setIsReportDialogOpen(true), []);
+    const closeReportDialog = useCallback(() => setIsReportDialogOpen(false), []);
+
     return (
         <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row">
             {/* Mobile: Header/Sidebar Hidden */}
@@ -28,7 +31,7 @@ export default function Shell({ children }: ShellProps) {
             <div className="hidden md:block fixed top-0 left-0 right-0 z-30">
                 <Header
                     toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-                    onReportClick={() => setIsReportDialogOpen(true)}
+                    onReportClick={openReportDialog}
                 />
             </div>
 
@@ -54,13 +57,13 @@ export default function Shell({ children }: ShellProps) {
 
             {/* Mobile Bottom Nav */}
             <div className="md:hidden">
-                <BottomNav onReportClick={() => setIsReportDialogOpen(true)} />
+                <BottomNav onReportClick={openReportDialog} />
             </div>
 
             {/* Desktop Dialog (Mobile uses FAB via BottomNav) */}
             <ReportIssueDialog
                 isOpen={isReportDialogOpen}
-                onClose={() => setIsReportDialogOpen(false)}
+                onClose={closeReportDialog}
             />
 
             <OnboardingModal />

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { collection, query, orderBy, limit as fbLimit, getDocs, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -107,6 +107,18 @@ export default function LeaderboardPage() {
         }
     };
 
+    // Memoize the enriched entry list — getLevelFromXp and getVoteWeightTier are pure
+    // and now cached at the lib level, but useMemo prevents even the loop overhead
+    // on re-renders that don't change the entries array (e.g. tab focus, toast updates).
+    const enrichedEntries = useMemo(() =>
+        entries.map((entry) => ({
+            ...entry,
+            levelInfo: getLevelFromXp(entry.xp),
+            trustTier: getVoteWeightTier(entry.trustScore),
+        })),
+        [entries]
+    );
+
     return (
         <div className="min-h-screen bg-gray-50 pb-24">
             {/* Header */}
@@ -166,10 +178,9 @@ export default function LeaderboardPage() {
                     </div>
                 ) : (
                     <div className="space-y-2">
-                        {entries.map((entry, idx) => {
+                        {enrichedEntries.map((entry, idx) => {
                             const isMe = entry.uid === user?.uid;
-                            const levelInfo = getLevelFromXp(entry.xp);
-                            const trustTier = getVoteWeightTier(entry.trustScore);
+                            const { levelInfo, trustTier } = entry;
                             const medal = getMedalEmoji(idx);
 
                             return (

@@ -196,3 +196,11 @@ export const INDIAN_CITIES: City[] = [
     { name: 'Pondicherry', tier: 2, lat: 11.9416, lng: 79.8083, state: 'Puducherry' },
     { name: 'Katni', tier: 2, lat: 23.8343, lng: 80.3954, state: 'Madhya Pradesh' }
 ];
+
+/**
+ * INDIAN_CITIES pre-sorted by tier ascending.
+ * Computed once at module load — avoids repeated sort() calls at render time.
+ */
+export const INDIAN_CITIES_SORTED_BY_TIER: City[] = [...INDIAN_CITIES].sort(
+    (a, b) => a.tier - b.tier
+);

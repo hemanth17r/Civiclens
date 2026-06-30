@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Search, TrendingUp, Loader2, User, MapPin, Users, LayoutGrid, ChevronLeft } from 'lucide-react';
 import { clsx } from 'clsx';
 import { getTrendingIssues, searchUsers, searchIssues, Issue, UserSearchResult } from '@/lib/issues';
@@ -8,6 +8,9 @@ import IssueCard from '@/components/IssueCard';
 import { useRouter } from 'next/navigation';
 import { INDIAN_CITIES } from '@/data/cities';
 import { useAuth } from '@/context/AuthContext';
+
+// Module-level Map for O(1) city-name lookup (avoids 190-entry linear scan per search submit)
+const CITY_NAME_MAP = new Map(INDIAN_CITIES.map(c => [c.name.toLowerCase(), c]));
 
 // Match categories with ReportIssueDialog
 const categories = ["All", "Road", "Waste", "Water", "Safety", "Infrastructure", "Environment", "Other"];
@@ -33,6 +36,16 @@ export default function ExplorePage() {
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const mobileSearchRef = useRef<HTMLFormElement>(null);
     const desktopSearchRef = useRef<HTMLFormElement>(null);
+
+    // Pre-filter place results — avoids running the predicate twice (length check + map)
+    const placeFilteredIssues = useMemo(() =>
+        searchResultsIssues.filter(i =>
+            matchedCity
+                ? i.cityName?.toLowerCase() === matchedCity.toLowerCase()
+                : i.location?.toLowerCase().includes(searchQuery.toLowerCase()) || i.cityName?.toLowerCase().includes(searchQuery.toLowerCase())
+        ),
+        [searchResultsIssues, matchedCity, searchQuery]
+    );
 
     // Fetch trending issues
     const fetchTrending = useCallback(async (cat: string) => {
@@ -85,10 +98,8 @@ export default function ExplorePage() {
         setIsResultsView(true);
 
         try {
-            // Check for city match
-            const cityMatch = INDIAN_CITIES.find(c => 
-                c.name.toLowerCase() === searchQuery.trim().toLowerCase()
-            );
+            // Check for city match — O(1) lookup via pre-built Map
+            const cityMatch = CITY_NAME_MAP.get(searchQuery.trim().toLowerCase());
             
             if (cityMatch) {
                 setMatchedCity(cityMatch.name);
@@ -381,20 +392,10 @@ export default function ExplorePage() {
 
                                 {activeTab === 'places' && (
                                     <>
-                                        {searchResultsIssues.filter(i => 
-                                            matchedCity 
-                                                ? i.cityName?.toLowerCase() === matchedCity.toLowerCase()
-                                                : i.location?.toLowerCase().includes(searchQuery.toLowerCase()) || i.cityName?.toLowerCase().includes(searchQuery.toLowerCase())
-                                        ).length > 0 ? (
-                                            searchResultsIssues
-                                                .filter(i => 
-                                                    matchedCity 
-                                                        ? i.cityName?.toLowerCase() === matchedCity.toLowerCase()
-                                                        : i.location?.toLowerCase().includes(searchQuery.toLowerCase()) || i.cityName?.toLowerCase().includes(searchQuery.toLowerCase())
-                                                )
-                                                .map(issue => (
-                                                    <IssueCard key={issue.id} issue={issue} />
-                                                ))
+                                        {placeFilteredIssues.length > 0 ? (
+                                            placeFilteredIssues.map(issue => (
+                                                <IssueCard key={issue.id} issue={issue} />
+                                            ))
                                         ) : (
                                             <div className="p-12 text-center text-gray-400 bg-white rounded-2xl border border-gray-100">
                                                 <MapPin size={48} className="mx-auto mb-4 opacity-10" />

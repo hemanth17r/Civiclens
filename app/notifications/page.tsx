@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Bell, Flame, MessageCircle, CheckCircle, AlertTriangle, ShieldCheck, Clock, CheckCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getNotifications, markAsRead, markAllRead, NotificationData } from '@/lib/notifications';
@@ -62,7 +62,7 @@ export default function NotificationsPage() {
         }
     };
 
-    const unreadCount = notifications.filter(n => !n.read).length;
+    const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
 
     return (
         <div className="min-h-screen bg-white pb-20 md:pb-0">

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useMemo } from 'react';
 import {
     User,
     signOut,
@@ -240,11 +240,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // Admin check: prefer Firebase custom claims, fall back to hardcoded email
     // To set custom claims: admin.auth().setCustomUserClaims(uid, { admin: true })
-    const isAdmin = (user as any)?.customClaims?.admin === true || user?.email === 'hemanthreddya276@gmail.com';
-    const isOfficial = userProfile?.role === 'official' || isAdmin;
+    const isAdmin = useMemo(
+        () => (user as any)?.customClaims?.admin === true || user?.email === 'hemanthreddya276@gmail.com',
+        [user]
+    );
+    const isOfficial = useMemo(
+        () => userProfile?.role === 'official' || isAdmin,
+        [userProfile, isAdmin]
+    );
+
+    // Stabilise the context value — prevents all useAuth() consumers from
+    // re-rendering when unrelated state (e.g. loading) changes in the provider.
+    const contextValue = useMemo(
+        () => ({ user, userProfile, loading, profileChecked, isOfficial, isAdmin, sendMagicLink, loginWithGoogleCredential, loginWithGoogle, logout }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [user, userProfile, loading, profileChecked, isOfficial, isAdmin]
+    );
 
     return (
-        <AuthContext.Provider value={{ user, userProfile, loading, profileChecked, isOfficial, isAdmin, sendMagicLink, loginWithGoogleCredential, loginWithGoogle, logout }}>
+        <AuthContext.Provider value={contextValue}>
             {children}
         </AuthContext.Provider>
     );

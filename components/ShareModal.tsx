@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Copy, Check, Instagram } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -41,7 +41,7 @@ export default function ShareModal({ isOpen, onClose, issueId, issueTitle }: Sha
         }
     };
 
-    const shareOptions = [
+    const shareOptions = useMemo(() => [
         {
             name: 'WhatsApp',
             icon: WhatsappIcon,
@@ -60,12 +60,10 @@ export default function ShareModal({ isOpen, onClose, issueId, issueTitle }: Sha
             color: 'bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888] text-white',
             action: async () => {
                 await handleCopy();
-                // Instagram does not have a web intent URL that accepts parameters.
-                // Best UX is to copy the link and open the app/website so they can paste it.
                 window.open('https://instagram.com/', '_blank');
             }
         },
-    ];
+    ], [issueId, issueTitle, shareUrl, handleCopy]);
 
     return (
         <AnimatePresence>

@@ -7,6 +7,27 @@ import { getNotifications, getUnreadCount, markAsRead, markAllRead, Notification
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
 
+// ── Module-level pure helpers — extracted to avoid recreating closures every render ──
+function getNotifIcon(type: string, isUrgent: boolean) {
+    if (isUrgent) return <AlertTriangle size={16} className="text-red-600" />;
+    switch (type) {
+        case 'status_update':
+        case 'author_status':
+        case 'issue_approved': return <ShieldCheck size={16} className="text-green-600" />;
+        case 'issue_rejected': return <X size={16} className="text-red-600" />;
+        case 'hype':
+        case 'author_milestone': return <Flame size={16} className="text-orange-500" />;
+        case 'comment': return <MessageCircle size={16} className="text-blue-500" />;
+        default: return <Bell size={16} className="text-gray-500" />;
+    }
+}
+
+function getNotifBg(notif: NotificationData) {
+    if (notif.isUrgent && !notif.read) return 'bg-red-50 border-l-4 border-red-500';
+    if (!notif.read) return 'bg-blue-50/50';
+    return '';
+}
+
 export default function NotificationBell() {
     const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
@@ -18,6 +39,8 @@ export default function NotificationBell() {
     // Poll unread count every 30 seconds
     const refreshUnread = useCallback(async () => {
         if (!user) return;
+        // Skip when tab is hidden — avoids wasted Firestore reads in the background
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
         const count = await getUnreadCount(user.uid);
         setUnread(count);
     }, [user]);
@@ -25,7 +48,17 @@ export default function NotificationBell() {
     useEffect(() => {
         refreshUnread();
         const interval = setInterval(refreshUnread, 30000);
-        return () => clearInterval(interval);
+
+        // Pause polling when tab is hidden; fire immediately when it becomes visible again
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') refreshUnread();
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [refreshUnread]);
 
     // Load notifications when dropdown opens
@@ -63,25 +96,6 @@ export default function NotificationBell() {
         }
     };
 
-    const getNotifIcon = (type: string, isUrgent: boolean) => {
-        if (isUrgent) return <AlertTriangle size={16} className="text-red-600" />;
-        switch (type) {
-            case 'status_update':
-            case 'author_status':
-            case 'issue_approved': return <ShieldCheck size={16} className="text-green-600" />;
-            case 'issue_rejected': return <X size={16} className="text-red-600" />;
-            case 'hype':
-            case 'author_milestone': return <Flame size={16} className="text-orange-500" />;
-            case 'comment': return <MessageCircle size={16} className="text-blue-500" />;
-            default: return <Bell size={16} className="text-gray-500" />;
-        }
-    };
-
-    const getNotifBg = (notif: NotificationData) => {
-        if (notif.isUrgent && !notif.read) return 'bg-red-50 border-l-4 border-red-500';
-        if (!notif.read) return 'bg-blue-50/50';
-        return '';
-    };
 
     const formatTime = (ts: any) => {
         if (!ts) return 'Just now';
