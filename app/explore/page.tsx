@@ -218,9 +218,8 @@ export default function ExplorePage() {
                     {isResultsView && (
                         <button 
                             onClick={() => setIsResultsView(false)}
-                            className="flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700"
+                            className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 text-xs font-bold rounded-full transition-colors"
                         >
-                            <ChevronLeft size={16} />
                             Back to Trending
                         </button>
                     )}

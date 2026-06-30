@@ -1106,9 +1106,6 @@ export const searchIssues = async (searchQuery: string, currentUserId?: string):
         );
         const snapshot = await withRetry(() => getDocs(q));
         let all = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
-        
-        // Filter out unapproved issues unless the user is the author
-        all = all.filter(i => (i.status && i.status !== 'Reported') || (currentUserId && i.userId === currentUserId));
 
         const lower = searchQuery.toLowerCase();
         return all.filter(i =>

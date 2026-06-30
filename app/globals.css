@@ -76,10 +76,10 @@ div {
 }
 
 /* ── Focus ring for accessibility ──────────────────────────────────────── */
-:focus-visible {
+button:focus-visible,
+a:focus-visible {
   outline: 2px solid rgba(26, 115, 232, 0.5);
   outline-offset: 2px;
-  border-radius: 4px;
 }
 
 /* ── Global transitions ────────────────────────────────────────────────── */

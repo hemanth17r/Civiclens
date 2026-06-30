@@ -27,8 +27,8 @@ service cloud.firestore {
 
     // Users Collection
     match /users/{userId} {
-      // Anyone authenticated can read a user profile (needed for displaying names on reports)
-      allow read: if isAuthenticated();
+      // Anyone can read a user profile (needed for displaying names on reports and guest search)
+      allow read: if true;
       // Only the user themselves can write to their own profile, but they CANNOT update sensitive fields.
       allow create: if isAuthenticated() && isOwner(userId);
       allow update: if isAuthenticated() && (
