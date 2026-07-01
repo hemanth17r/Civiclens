@@ -103,8 +103,6 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
         }
     };
 
-    if (!isOpen) return null;
-
     const filteredUsers = useMemo(() =>
         users.filter(u =>
             (u.displayName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -112,6 +110,8 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
         ),
         [users, searchQuery]
     );
+
+    if (!isOpen) return null;
 
     return (
         <AnimatePresence>

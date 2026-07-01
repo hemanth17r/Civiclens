@@ -19,7 +19,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, onReportClick }) => {
 
     return (
         <>
-            <header className="h-16 bg-[#f6f8fc] flex items-center px-6 justify-between fixed top-0 left-0 right-0 z-30">
+            <header className="h-16 bg-white flex items-center px-6 justify-between fixed top-0 left-0 right-0 z-30">
                 <div className="flex items-center gap-4 w-64">
                     <button onClick={toggleSidebar} className="p-2 hover:bg-gray-100 rounded-full text-gray-600">
                         <Menu size={24} />
@@ -32,7 +32,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, onReportClick }) => {
                 <div className="flex items-center gap-3 justify-end ml-auto">
                     <button
                         onClick={onReportClick}
-                        className="flex flex-row items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full font-medium transition-colors shadow-sm"
+                        className="flex flex-row items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full font-semibold shadow-[0_1px_2px_0_rgba(0,0,0,0.05),inset_0_1px_0_0_rgba(255,255,255,0.15)] transition-all hover:shadow-[0_2px_4px_0_rgba(0,0,0,0.08)] hover:-translate-y-[0.5px] active:translate-y-0"
                     >
                         <Plus size={18} strokeWidth={2.5} />
                         <span className="text-sm">Report Issue</span>

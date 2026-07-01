@@ -13,6 +13,7 @@ import { supabase, getAuthenticatedSupabase } from '@/lib/supabase';
 import { Issue, getUserHypedIssues, getUserCommentedIssues, getUserSavedIssues } from '@/lib/issues';
 import { getFollowStats } from '@/lib/followers';
 import IssueCard from '@/components/IssueCard';
+import FeedSkeleton from '@/components/FeedSkeleton';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
@@ -341,7 +342,7 @@ export default function ProfilePage() {
     // ── Guest ─────────────────────────────────────────────────────────────────
     if (!user) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen text-center p-6 bg-gray-50">
+            <div className="flex flex-col items-center justify-center min-h-screen text-center p-6 bg-white">
                 <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                     <User size={40} className="text-gray-300" />
                 </div>
@@ -352,266 +353,261 @@ export default function ProfilePage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 pb-24">
+        <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24">
 
-            {/* ── PROFILE CARD ─────────────────────────────────────────────── */}
-            <div className="bg-white border-b border-gray-100">
-                <div className="max-w-lg mx-auto px-5 pt-8 pb-0">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">My Profile</h1>
+                </div>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={openEditProfile}
+                        className="flex items-center group px-4 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+                    >
+                        <MapPin size={16} className={clsx('mr-1.5 flex-shrink-0 transition-colors', city ? 'text-gray-900' : 'text-gray-500 group-hover:text-gray-700')} />
+                        <span className={clsx('text-sm font-semibold transition-colors', city ? 'text-gray-900' : 'text-gray-500 group-hover:text-gray-700')}>
+                            {city || 'Add Location'}
+                        </span>
+                    </button>
+                    <button
+                        onClick={() => setDrawer('menu')}
+                        className="p-2 rounded-full text-gray-800 hover:bg-gray-100 transition-colors"
+                    >
+                        <Menu size={24} />
+                    </button>
+                </div>
+            </div>
 
-                    {/* Top bar: Location left, Menu right */}
-                    <div className="flex justify-between items-center mb-5">
-                        <button
-                            onClick={openEditProfile}
-                            className="flex items-center group px-4 py-1.5 -ml-1 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
-                        >
-                            <MapPin size={16} className={clsx('mr-1.5 flex-shrink-0 transition-colors', city ? 'text-gray-900' : 'text-gray-500 group-hover:text-gray-700')} />
-                            <span className={clsx('text-sm font-semibold transition-colors', city ? 'text-gray-900' : 'text-gray-500 group-hover:text-gray-700')}>
-                                {city || 'Add Location'}
-                            </span>
-                        </button>
-
-                        <button
-                            onClick={() => setDrawer('menu')}
-                            className="p-2 -mr-2 rounded-full text-gray-800 hover:bg-gray-100 transition-colors"
-                        >
-                            <Menu size={24} />
-                        </button>
+            {/* Profile Card */}
+            <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 flex flex-col md:flex-row gap-6 items-center md:items-start text-center md:text-left relative">
+                <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 p-[2.5px] shadow-lg flex-shrink-0 overflow-hidden relative group">
+                    <div className="w-full h-full rounded-full overflow-hidden bg-white">
+                        {avatarUrl ? (
+                            <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-blue-500 to-purple-500 text-white text-2xl font-bold">
+                                {displayName[0].toUpperCase()}
+                            </div>
+                        )}
                     </div>
+                    <button
+                        onClick={() => photoInputRef.current?.click()}
+                        className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                    >
+                        <Camera size={22} className="text-white" />
+                    </button>
+                </div>
 
-                    {/* Avatar row: pic LEFT, Name+Stats RIGHT */}
-                    <div className="flex items-center justify-between gap-6 mb-6">
-                        {/* Avatar */}
-                        <div className="w-22 h-22 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 p-[2.5px] shadow-sm flex-shrink-0">
-                            <div className="w-20 h-20 rounded-full overflow-hidden bg-white">
-                                {avatarUrl ? (
-                                    <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-blue-500 to-purple-500 text-white text-2xl font-bold">
-                                        {displayName[0].toUpperCase()}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Right side: Name + Stats */}
-                        <div className="flex flex-col flex-1 pl-2">
-                            <h1 className="text-[15px] font-bold text-gray-900 leading-tight mb-3 flex items-center gap-2">
-                                {displayName}
-                                {isAdmin && <VerifiedBadge label="Admin" size="sm" />}
-                                {trustInfo && (
-                                    <TrustBadge
-                                        trustScore={trustInfo.trustScore}
-                                        tierName={trustInfo.tier.name}
-                                        tierColor={trustInfo.tier.color}
-                                        size="sm"
-                                    />
-                                )}
-                            </h1>
-                            <div className="flex gap-6 w-full">
-                                <div
-                                    className="flex flex-col cursor-pointer hover:opacity-80 transition-opacity"
-                                    onClick={() => setConnectionsModalType('followers')}
-                                >
-                                    <span className="font-semibold text-gray-900 text-[15px] leading-none">{followersCount}</span>
-                                    <span className="text-[13px] text-gray-600 mt-1">followers</span>
-                                </div>
-                                <div
-                                    className="flex flex-col cursor-pointer hover:opacity-80 transition-opacity"
-                                    onClick={() => setConnectionsModalType('following')}
-                                >
-                                    <span className="font-semibold text-gray-900 text-[15px] leading-none">{followingCount}</span>
-                                    <span className="text-[13px] text-gray-600 mt-1">following</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ── GAMIFICATION SECTION ── */}
-                    {gamification && (
-                        <div className="px-1 pt-3 pb-3">
-                            {/* Level + Trust Row */}
-                            <div className="flex items-center justify-between mb-3">
-                                <LevelBadge
-                                    level={gamification.level.level}
-                                    title={gamification.level.title}
-                                    emoji={gamification.level.emoji}
-                                    color={gamification.level.color}
-                                />
-
-                            </div>
-
-                            {/* XP Progress */}
-                            <XpProgressBar
-                                xp={gamification.xp}
-                                progress={gamification.xpProgress.progress}
-                                currentLevelXp={gamification.xpProgress.currentLevelXp}
-                                nextLevelXp={gamification.xpProgress.nextLevelXp}
-                                levelColor={gamification.level.color}
-                                currentLevel={gamification.level.level}
+                <div className="flex-1 space-y-2 w-full">
+                    <div className="flex items-center justify-center md:justify-start gap-2">
+                        <h2 className="text-2xl font-bold text-gray-900">
+                            {displayName}
+                        </h2>
+                        {trustInfo && (
+                            <TrustBadge
+                                trustScore={trustInfo.trustScore}
+                                tierName={trustInfo.tier.name}
+                                tierColor={trustInfo.tier.color}
+                                size="sm"
                             />
+                        )}
+                        {isAdmin && <VerifiedBadge label="Admin" size="sm" />}
+                    </div>
 
-                            {/* Streak + Impact Stats */}
-                            <div className="flex items-center justify-between mt-3">
-                                <StreakDisplay
-                                    currentStreak={gamification.currentStreak}
-                                    longestStreak={gamification.longestStreak}
-                                />
-                                <div className="flex gap-3 text-center">
-                                    <div className="flex flex-col">
-                                        <span className="text-sm font-bold text-emerald-600">{gamification.stats.totalResolved}</span>
-                                        <span className="text-[10px] text-gray-400 uppercase tracking-wide">Resolved</span>
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-sm font-bold text-blue-600">{gamification.stats.totalVerifications}</span>
-                                        <span className="text-[10px] text-gray-400 uppercase tracking-wide">Verified</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    <p className="text-lg text-blue-600 font-medium">{handle}</p>
 
-                    {/* ── CIVIC IMPACT SECTION ── */}
-                    {gamification && (
-                        <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 mb-6 mx-1">
-                            <h3 className="text-[13px] font-bold text-gray-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <Award size={16} className="text-blue-500" />
-                                Civic Impact
-                            </h3>
-                            <div className="grid grid-cols-2 gap-y-5 gap-x-2">
-                                <div className="flex flex-col">
-                                    <span className="text-2xl font-black text-gray-900">{myReports.length}</span>
-                                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Issues Reported</span>
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-2xl font-black text-blue-600">{gamification.stats.totalVerifications}</span>
-                                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Issues Verified</span>
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-2xl font-black text-emerald-600">{gamification.stats.totalResolved}</span>
-                                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Issues Resolved</span>
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-2xl font-black text-purple-600">
-                                        {trustInfo && (trustInfo.accurateVotes + trustInfo.wrongVotes) > 0 
-                                            ? Math.round((trustInfo.accurateVotes / (trustInfo.accurateVotes + trustInfo.wrongVotes)) * 100) + '%'
-                                            : '--'}
-                                    </span>
-                                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Verification Accuracy</span>
-                                </div>
-                                <div className="flex flex-col col-span-2 mt-2 pt-4 border-t border-gray-200/60">
-                                    <div className="flex justify-between items-center">
-                                        <div className="flex flex-col">
-                                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Contribution Score</span>
-                                            <span className="text-3xl font-black text-amber-500 flex items-center gap-1.5 mt-0.5">
-                                                <Zap size={22} className="fill-amber-500" /> {gamification.xp}
-                                            </span>
-                                        </div>
-                                        <div className="flex flex-col text-right">
-                                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">City Rank</span>
-                                            <span className="text-2xl font-black text-gray-900 mt-0.5">
-                                                {cityRank > 0 ? `#${cityRank}` : '--'} <span className="text-sm font-semibold text-gray-500 ml-1">in {city || 'City'}</span>
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* IG Tabs */}
-                    <div className="flex border-t border-gray-100">
-                        <button
-                            onClick={() => setActiveTab('reports')}
-                            className={clsx("flex-1 py-3 flex items-center justify-center gap-2 border-b-2 transition-colors", activeTab === 'reports' ? "border-gray-900" : "border-transparent")}
+                    <div className="pt-4 flex gap-6 justify-center md:justify-start">
+                        <div
+                            className="text-center md:text-left cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => setConnectionsModalType('followers')}
                         >
-                            <FileText size={20} className={clsx("transition-colors", activeTab === 'reports' ? "text-gray-900" : "text-gray-400")} />
-                            <span className={clsx("text-sm font-semibold transition-colors", activeTab === 'reports' ? "text-gray-900" : "text-gray-400")}>Reports</span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('activity')}
-                            className={clsx("flex-1 py-2.5 flex items-center justify-center gap-2 border-b-2 transition-colors", activeTab === 'activity' ? "border-gray-900" : "border-transparent")}
+                            <p className="text-xl font-bold text-gray-900">{followersCount}</p>
+                            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Followers</p>
+                        </div>
+                        <div
+                            className="text-center md:text-left cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => setConnectionsModalType('following')}
                         >
-                            <Heart size={20} className={clsx("transition-colors", activeTab === 'activity' ? "text-gray-900" : "text-gray-400")} />
-                            <span className={clsx("text-sm font-semibold transition-colors", activeTab === 'activity' ? "text-gray-900" : "text-gray-400")}>My Activity</span>
-                        </button>
+                            <p className="text-xl font-bold text-gray-900">{followingCount}</p>
+                            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Following</p>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* ── TAB CONTENT ── */}
-            <div className="max-w-lg mx-auto px-4 pt-5">
-                {activeTab === 'reports' ? (
-                    loadingReports ? (
-                        <div className="flex justify-center py-16">
-                            <Loader2 className="animate-spin text-blue-400" size={28} />
-                        </div>
-                    ) : myReports.length > 0 ? (
-                        <div className="space-y-5">
-                            {myReports.map((r) => <IssueCard key={r.id} issue={r} />)}
-                        </div>
-                    ) : (
-                        <div className="text-center py-16">
-                            <div className="w-16 h-16 rounded-full border-2 border-gray-200 flex items-center justify-center mx-auto mb-3 text-gray-300">
-                                <FileText size={28} strokeWidth={1.5} />
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-800">No Reports Yet</h3>
-                        </div>
-                    )
-                ) : (
-                    <>
-                        {/* Activity Subtabs: Hyped | Commented | Saved */}
-                        <div className="flex bg-white rounded-xl shadow-sm border border-gray-100 mb-5 overflow-hidden">
-                            <button
-                                onClick={() => setActivitySubTab('hyped')}
-                                className={clsx(
-                                    "flex-1 py-2.5 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
-                                    activitySubTab === 'hyped' ? "border-orange-500 text-orange-600 bg-orange-50/50" : "border-transparent text-gray-400 hover:text-gray-600"
-                                )}
-                            >
-                                <Flame size={18} />
-                                Hyped
-                            </button>
-                            <button
-                                onClick={() => setActivitySubTab('commented')}
-                                className={clsx(
-                                    "flex-1 py-2.5 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
-                                    activitySubTab === 'commented' ? "border-blue-500 text-blue-600 bg-blue-50/50" : "border-transparent text-gray-400 hover:text-gray-600"
-                                )}
-                            >
-                                <MessageCircle size={18} />
-                                Commented
-                            </button>
-                            <button
-                                onClick={() => setActivitySubTab('saved')}
-                                className={clsx(
-                                    "flex-1 py-2.5 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
-                                    activitySubTab === 'saved' ? "border-gray-900 text-gray-900 bg-gray-50" : "border-transparent text-gray-400 hover:text-gray-600"
-                                )}
-                            >
-                                <Bookmark size={18} />
-                                Saved
-                            </button>
-                        </div>
+            {/* Level & Progress Card */}
+            {gamification && (
+                <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <LevelBadge
+                            level={gamification.level.level}
+                            title={gamification.level.title}
+                            emoji={gamification.level.emoji}
+                            color={gamification.level.color}
+                        />
+                        <StreakDisplay
+                            currentStreak={gamification.currentStreak}
+                            longestStreak={gamification.longestStreak}
+                        />
+                    </div>
 
-                        {loadingActivity ? (
-                            <div className="flex justify-center py-16">
-                                <Loader2 className="animate-spin text-blue-400" size={28} />
+                    <XpProgressBar
+                        xp={gamification.xp}
+                        progress={gamification.xpProgress.progress}
+                        currentLevelXp={gamification.xpProgress.currentLevelXp}
+                        nextLevelXp={gamification.xpProgress.nextLevelXp}
+                        levelColor={gamification.level.color}
+                        currentLevel={gamification.level.level}
+                    />
+                </div>
+            )}
+
+            {/* Civic Impact Section */}
+            {gamification && (
+                <div className="bg-white border border-gray-100 rounded-3xl p-6 md:p-8 shadow-sm">
+                    <h3 className="text-[13px] font-bold text-gray-800 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <Award size={18} className="text-blue-500" />
+                        Civic Impact
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4">
+                        <div className="flex flex-col">
+                            <span className="text-3xl font-black text-gray-900">{myReports.length}</span>
+                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Issues Reported</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-3xl font-black text-blue-600">{gamification.stats.totalVerifications}</span>
+                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Issues Verified</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-3xl font-black text-emerald-600">{gamification.stats.totalResolved}</span>
+                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Issues Resolved</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-3xl font-black text-purple-600">
+                                {trustInfo && (trustInfo.accurateVotes + trustInfo.wrongVotes) > 0 
+                                    ? Math.round((trustInfo.accurateVotes / (trustInfo.accurateVotes + trustInfo.wrongVotes)) * 100) + '%'
+                                    : '--'}
+                            </span>
+                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Verification Accuracy</span>
+                        </div>
+                        
+                        <div className="col-span-2 md:col-span-4 mt-2 pt-6 border-t border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                            <div className="flex flex-col">
+                                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Contribution Score</span>
+                                <span className="text-4xl font-black text-amber-500 flex items-center gap-2 mt-1">
+                                    <Zap size={28} className="fill-amber-500" /> {gamification.xp}
+                                </span>
                             </div>
-                        ) : activityList.length > 0 ? (
-                            <div className="space-y-5">
-                                {activityList.map((r) => <IssueCard key={r.id} issue={r} />)}
+                            <div className="flex flex-col text-left md:text-right w-full md:w-auto">
+                                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">City Rank</span>
+                                <span className="text-3xl font-black text-gray-900 mt-1">
+                                    {cityRank > 0 ? `#${cityRank}` : '--'} <span className="text-lg font-semibold text-gray-500 ml-1">in {city || 'City'}</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* IG Tabs & Content */}
+            <div className="space-y-6">
+                <div className="flex border-b border-gray-100">
+                    <button
+                        onClick={() => setActiveTab('reports')}
+                        className={clsx("flex-1 py-3.5 flex items-center justify-center gap-2 border-b-2 transition-colors", activeTab === 'reports' ? "border-blue-600 text-blue-600 font-bold" : "border-transparent text-gray-400 font-semibold")}
+                    >
+                        <FileText size={20} />
+                        <span>Reports ({myReports.length})</span>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('activity')}
+                        className={clsx("flex-1 py-3.5 flex items-center justify-center gap-2 border-b-2 transition-colors", activeTab === 'activity' ? "border-blue-600 text-blue-600 font-bold" : "border-transparent text-gray-400 font-semibold")}
+                    >
+                        <Heart size={20} />
+                        <span>My Activity</span>
+                    </button>
+                </div>
+
+                <div>
+                    {activeTab === 'reports' ? (
+                        loadingReports ? (
+                            <div className="space-y-6">
+                                {Array(2).fill(0).map((_, i) => (
+                                    <FeedSkeleton key={i} />
+                                ))}
+                            </div>
+                        ) : myReports.length > 0 ? (
+                            <div className="space-y-6">
+                                {myReports.map((r) => <IssueCard key={r.id} issue={r} />)}
                             </div>
                         ) : (
-                            <div className="text-center py-16">
+                            <div className="bg-gray-50 rounded-2xl p-12 text-center border border-dashed border-gray-200">
                                 <div className="w-16 h-16 rounded-full border-2 border-gray-200 flex items-center justify-center mx-auto mb-3 text-gray-300">
-                                    {activityEmptyIcon}
+                                    <FileText size={28} strokeWidth={1.5} />
                                 </div>
-                                <h3 className="text-xl font-bold text-gray-800">{activityEmptyMessage.title}</h3>
-                                <p className="text-gray-500 text-sm mt-1">{activityEmptyMessage.desc}</p>
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">No Reports Yet</h3>
+                                <p className="text-gray-500">You haven't reported any civic issues yet.</p>
                             </div>
-                        )}
-                    </>
-                )}
+                        )
+                    ) : (
+                        <>
+                            {/* Activity Subtabs: Hyped | Commented | Saved */}
+                            <div className="flex bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden">
+                                <button
+                                    onClick={() => setActivitySubTab('hyped')}
+                                    className={clsx(
+                                        "flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
+                                        activitySubTab === 'hyped' ? "border-orange-500 text-orange-600 bg-orange-50/50" : "border-transparent text-gray-400 hover:text-gray-600"
+                                    )}
+                                >
+                                    <Flame size={18} />
+                                    Hyped
+                                </button>
+                                <button
+                                    onClick={() => setActivitySubTab('commented')}
+                                    className={clsx(
+                                        "flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
+                                        activitySubTab === 'commented' ? "border-blue-500 text-blue-600 bg-blue-50/50" : "border-transparent text-gray-400 hover:text-gray-600"
+                                    )}
+                                >
+                                    <MessageCircle size={18} />
+                                    Commented
+                                </button>
+                                <button
+                                    onClick={() => setActivitySubTab('saved')}
+                                    className={clsx(
+                                        "flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
+                                        activitySubTab === 'saved' ? "border-gray-900 text-gray-900 bg-gray-50" : "border-transparent text-gray-400 hover:text-gray-600"
+                                    )}
+                                >
+                                    <Bookmark size={18} />
+                                    Saved
+                                </button>
+                            </div>
+
+                            {loadingActivity ? (
+                                <div className="space-y-6">
+                                    {Array(2).fill(0).map((_, i) => (
+                                        <FeedSkeleton key={i} />
+                                    ))}
+                                </div>
+                            ) : activityList.length > 0 ? (
+                                <div className="space-y-6">
+                                    {activityList.map((r) => <IssueCard key={r.id} issue={r} />)}
+                                </div>
+                            ) : (
+                                <div className="bg-gray-50 rounded-2xl p-12 text-center border border-dashed border-gray-200">
+                                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
+                                        {activityEmptyIcon}
+                                    </div>
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">{activityEmptyMessage.title}</h3>
+                                    <p className="text-gray-500 text-sm">{activityEmptyMessage.desc}</p>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
             </div>
 
             {/* ── RIGHT-SIDE DRAWER ─────────────────────────────────────────── */}

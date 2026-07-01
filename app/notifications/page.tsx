@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { getNotifications, markAsRead, markAllRead, NotificationData } from '@/lib/notifications';
 import { formatDistanceToNow } from 'date-fns';
 import { Loader2 } from 'lucide-react';
+import { ListSkeleton } from '@/components/Skeletons';
 
 import { useRouter } from 'next/navigation';
 
@@ -92,8 +93,8 @@ export default function NotificationsPage() {
             </div>
 
             {loading ? (
-                <div className="flex justify-center py-20">
-                    <Loader2 className="animate-spin text-gray-400" size={28} />
+                <div className="max-w-lg mx-auto px-4 py-6">
+                    <ListSkeleton />
                 </div>
             ) : !user ? (
                 <div className="bg-white flex flex-col items-center justify-center p-6 text-center py-20 pb-32">

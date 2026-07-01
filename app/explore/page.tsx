@@ -5,6 +5,7 @@ import { Search, TrendingUp, Loader2, User, MapPin, Users, LayoutGrid, ChevronLe
 import { clsx } from 'clsx';
 import { getTrendingIssues, searchUsers, searchIssues, Issue, UserSearchResult } from '@/lib/issues';
 import IssueCard from '@/components/IssueCard';
+import FeedSkeleton from '@/components/FeedSkeleton';
 import { useRouter } from 'next/navigation';
 import { INDIAN_CITIES } from '@/data/cities';
 import { useAuth } from '@/context/AuthContext';
@@ -192,9 +193,9 @@ export default function ExplorePage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
+        <div className="min-h-screen bg-white pb-20 md:pb-0">
             {/* Sticky Header */}
-            {user ? (
+            {user && (
                 <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md pt-4 pb-2 px-4 shadow-sm md:hidden">
                     <form onSubmit={handleSearchSubmit} className="relative" ref={mobileSearchRef}>
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -209,16 +210,10 @@ export default function ExplorePage() {
                         {renderDropdown()}
                     </form>
                 </div>
-            ) : (
-                <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md py-3 px-4 shadow-sm md:hidden text-center text-xs">
-                    <p className="text-gray-500">
-                        <Link href="/login" className="text-blue-600 font-bold hover:underline">Sign in</Link> to search handles, issues, and places.
-                    </p>
-                </div>
             )}
 
             {/* Desktop Header */}
-            <div className="hidden md:block p-6 bg-white border-b border-gray-100">
+            <div className="hidden md:block p-6 bg-white">
                 <div className="flex items-center justify-between mb-4">
                     <h1 className="text-2xl font-bold text-gray-900">
                         {isResultsView ? 'Search Results' : 'Explore Community Issues'}
@@ -232,7 +227,7 @@ export default function ExplorePage() {
                         </button>
                     )}
                 </div>
-                {user ? (
+                {user && (
                     <form onSubmit={handleSearchSubmit} className="relative max-w-xl" ref={desktopSearchRef}>
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                         <input
@@ -245,10 +240,6 @@ export default function ExplorePage() {
                         />
                         {renderDropdown()}
                     </form>
-                ) : (
-                    <p className="text-sm text-gray-500">
-                        <Link href="/login" className="text-blue-600 font-bold hover:underline">Sign in</Link> to search @handles, issues, and places.
-                    </p>
                 )}
             </div>
 
@@ -256,7 +247,7 @@ export default function ExplorePage() {
             {!isResultsView ? (
                 <>
                     {/* Category Pills */}
-                    <div className="bg-white border-b border-gray-100 py-3 overflow-x-auto no-scrollbar">
+                    <div className="bg-white py-3 overflow-x-auto no-scrollbar">
                         <div className="flex px-4 gap-2 min-w-max">
                             {categories.map((cat) => (
                                 <button
@@ -285,8 +276,10 @@ export default function ExplorePage() {
                     {/* Trending Content */}
                     <div className="max-w-2xl mx-auto px-4 pb-4">
                         {loadingTrending ? (
-                            <div className="flex justify-center py-16">
-                                <Loader2 className="animate-spin text-gray-400" size={28} />
+                            <div className="space-y-5">
+                                {Array(3).fill(0).map((_, i) => (
+                                    <FeedSkeleton key={i} />
+                                ))}
                             </div>
                         ) : trendingIssues.length > 0 ? (
                             <div className="space-y-5">
@@ -312,7 +305,7 @@ export default function ExplorePage() {
             ) : (
                 <>
                     {/* Search Tabs */}
-                    <div className="bg-white border-b border-gray-100 flex sticky top-0 z-10 md:static">
+                    <div className="bg-white flex sticky top-0 z-10 md:static">
                         <button 
                             onClick={() => setActiveTab('accounts')}
                             className={clsx(

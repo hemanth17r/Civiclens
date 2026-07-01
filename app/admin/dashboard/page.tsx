@@ -366,7 +366,7 @@ export default function AdminDashboardPage() {
         : approvedIssues.filter(i => (i.cityName || 'Unknown') === approvedCityFilter);
 
     if (loading || !isAdmin) {
-        return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-gray-400" size={32} /></div>;
+        return <div className="min-h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-gray-400" size={32} /></div>;
     }
 
     // Google Docs Style Card Renderer
@@ -425,7 +425,7 @@ export default function AdminDashboardPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
+        <div className="min-h-screen bg-white pb-20 md:pb-0">
             {/* Header */}
             <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 text-white px-5 pt-12 pb-8 shadow-md relative z-10">
                 <div className="max-w-6xl mx-auto flex justify-between items-center h-16">

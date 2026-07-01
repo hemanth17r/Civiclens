@@ -9,6 +9,7 @@ import { Loader2, Trophy, Flame, Shield, ChevronDown } from 'lucide-react';
 import { getLevelFromXp } from '@/lib/gamification';
 import { getVoteWeightTier, TRUST_DEFAULT } from '@/lib/trust';
 import { LevelBadge, TrustBadge } from '@/components/GamificationUI';
+import { ListSkeleton } from '@/components/Skeletons';
 import Link from 'next/link';
 
 interface LeaderboardEntry {
@@ -120,9 +121,9 @@ export default function LeaderboardPage() {
     );
 
     return (
-        <div className="min-h-screen bg-gray-50 pb-24">
+        <div className="min-h-screen bg-white pb-24">
             {/* Header */}
-            <div className="bg-white border-b border-gray-100">
+            <div className="bg-white">
                 <div className="max-w-lg mx-auto px-5 pt-8 pb-5">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center shadow-md shadow-amber-200">
@@ -167,9 +168,7 @@ export default function LeaderboardPage() {
             {/* Content */}
             <div className="max-w-lg mx-auto px-4 pt-4">
                 {loading ? (
-                    <div className="flex justify-center py-16">
-                        <Loader2 className="animate-spin text-amber-500" size={28} />
-                    </div>
+                    <ListSkeleton />
                 ) : entries.length === 0 ? (
                     <div className="text-center py-16">
                         <Trophy size={32} className="text-gray-300 mx-auto mb-3" />

@@ -77,7 +77,7 @@ export default function MissionsPage() {
 
     if (!user) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen text-center p-6 bg-gray-50">
+            <div className="flex flex-col items-center justify-center min-h-screen text-center p-6 bg-white">
                 <Target size={40} className="text-gray-300 mb-4" />
                 <h1 className="text-xl font-bold text-gray-900 mb-1">Sign in to see missions</h1>
                 <p className="text-gray-500 text-sm">Active missions will appear here.</p>
@@ -86,9 +86,9 @@ export default function MissionsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 pb-24">
+        <div className="min-h-screen bg-white pb-24">
             {/* Header */}
-            <div className="bg-white border-b border-gray-100">
+            <div className="bg-white">
                 <div className="max-w-lg mx-auto px-5 pt-8 pb-5">
                     <div className="flex items-center gap-3 mb-1">
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md shadow-orange-200">
@@ -105,8 +105,26 @@ export default function MissionsPage() {
             {/* Content */}
             <div className="max-w-lg mx-auto px-4 pt-5">
                 {loading ? (
-                    <div className="flex justify-center py-16">
-                        <Loader2 className="animate-spin text-amber-500" size={28} />
+                    <div className="space-y-4">
+                        {[1, 2, 3].map((i) => (
+                            <div key={i} className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 animate-pulse">
+                                <div className="flex items-start gap-3">
+                                    <div className="w-11 h-11 rounded-xl bg-gray-200 flex-shrink-0" />
+                                    <div className="flex-1 space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="h-4 bg-gray-200 rounded w-1/3" />
+                                            <div className="h-4 bg-gray-200 rounded w-16" />
+                                        </div>
+                                        <div className="h-3 bg-gray-200 rounded w-2/3" />
+                                    </div>
+                                </div>
+                                <div className="w-full h-2 bg-gray-200 rounded-full" />
+                                <div className="flex justify-between">
+                                    <div className="h-3 bg-gray-200 rounded w-12" />
+                                    <div className="h-3 bg-gray-200 rounded w-16" />
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 ) : missions.length === 0 ? (
                     <div className="text-center py-12">

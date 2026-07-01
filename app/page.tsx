@@ -58,10 +58,10 @@ function HeroSection({
                     <button
                         onClick={onReportClick}
                         className={clsx(
-                            'group flex items-center justify-center gap-2 px-8 py-3.5 font-bold rounded-full transition-all border-2',
+                            'group flex items-center justify-center gap-2 px-8 py-3.5 font-semibold rounded-xl transition-all border',
                             userState === 'A'
-                                ? 'w-full sm:w-auto border-blue-600 bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20'
-                                : 'w-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                                ? 'w-full sm:w-auto border-blue-600 bg-blue-600 hover:bg-blue-700 text-white shadow-[0_1px_3px_0_rgba(0,0,0,0.1),0_1px_2px_0_rgba(0,0,0,0.06),inset_0_1px_0_0_rgba(255,255,255,0.15)] hover:shadow-[0_4px_6px_-1px_rgba(37,99,235,0.15),0_2px_4px_-1px_rgba(37,99,235,0.1)] hover:-translate-y-[0.5px] active:translate-y-0'
+                                : 'w-full border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm'
                         )}
                     >
                         Make Impact
@@ -176,7 +176,7 @@ export default function Home() {
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="min-h-screen bg-gray-50 pb-20 md:pb-8">
+        <div className="min-h-screen bg-white pb-20 md:pb-8">
 
             <HeroSection
                 userState={userState}
@@ -210,7 +210,7 @@ export default function Home() {
                         </p>
                         <button
                             onClick={() => router.push('/profile')}
-                            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-full transition-colors"
+                            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition-all shadow-sm"
                         >
                             Go to Profile → Set City
                         </button>

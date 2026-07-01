@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc, collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { Issue } from '@/lib/issues';
 import IssueCard from '@/components/IssueCard';
+import FeedSkeleton from '@/components/FeedSkeleton';
 import { ArrowLeft, UserCircle2, AlertTriangle, ShieldCheck, ChevronDown, Award, Zap } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { reportUser } from '../../../lib/moderation';
@@ -177,7 +178,58 @@ export default function PublicProfilePage() {
     };
 
     if (loading) {
-        return <div className="p-8 text-center text-gray-500">Loading profile...</div>;
+        return (
+            <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-8 pb-24">
+                {/* Header Skeleton */}
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => router.back()}
+                        className="p-2 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0"
+                    >
+                        <ArrowLeft size={20} className="text-gray-600" />
+                    </button>
+                    <div className="flex-1">
+                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Public Profile</h1>
+                    </div>
+                </div>
+
+                {/* Profile Card Skeleton */}
+                <div className="bg-white rounded-3xl p-6 md:p-8 border border-gray-100 flex flex-col md:flex-row gap-6 items-center md:items-start text-center md:text-left relative animate-pulse">
+                    <div className="w-24 h-24 rounded-full bg-gray-200 flex-shrink-0" />
+                    <div className="flex-1 space-y-3 w-full">
+                        <div className="h-6 bg-gray-200 rounded w-1/3 mx-auto md:mx-0" />
+                        <div className="h-4 bg-gray-200 rounded w-1/4 mx-auto md:mx-0" />
+                        <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto md:mx-0" />
+                        <div className="pt-2 flex gap-6 justify-center md:justify-start">
+                            <div className="h-8 bg-gray-200 rounded w-20" />
+                            <div className="h-8 bg-gray-200 rounded w-20" />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Civic Impact Skeleton */}
+                <div className="bg-white border border-gray-100 rounded-3xl p-6 md:p-8 space-y-6 animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded w-24" />
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4">
+                        {[1, 2, 3, 4].map(i => (
+                            <div key={i} className="space-y-2">
+                                <div className="h-8 bg-gray-200 rounded w-12" />
+                                <div className="h-3 bg-gray-200 rounded w-20" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Reported Issues Feed Skeleton */}
+                <div className="space-y-6">
+                    <div className="h-6 bg-gray-200 rounded w-36 animate-pulse" />
+                    <div className="space-y-6">
+                        <FeedSkeleton />
+                        <FeedSkeleton />
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     if (error || !profile) {
@@ -282,9 +334,9 @@ export default function PublicProfilePage() {
                             <button
                                 onClick={handleFollowToggle}
                                 disabled={actionLoading}
-                                className={`flex-1 md:flex-none md:w-32 py-2 rounded-xl font-bold transition-all text-sm ${isFollowing
+                                className={`flex-1 md:flex-none md:w-32 py-2 rounded-xl font-semibold transition-all text-sm ${isFollowing
                                     ? 'bg-gray-100 text-gray-800 hover:bg-red-50 hover:text-red-600 hover:border-red-100 border border-transparent'
-                                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-600/20'
+                                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
                                     }`}
                             >
                                 {actionLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
