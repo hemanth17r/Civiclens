@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { collection, query, orderBy, limit as fbLimit, getDocs, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { motion } from 'framer-motion';
+import { springJelly, tapScale } from '@/lib/motion';
 import { Loader2, Trophy, Flame, Shield, ChevronDown } from 'lucide-react';
 import { getLevelFromXp } from '@/lib/gamification';
 import { getVoteWeightTier, TRUST_DEFAULT } from '@/lib/trust';
@@ -123,8 +124,8 @@ export default function LeaderboardPage() {
     return (
         <div className="min-h-screen bg-white pb-24">
             {/* Header */}
-            <div className="bg-white">
-                <div className="max-w-lg mx-auto px-5 pt-8 pb-5">
+            <div className="bg-white border-b border-gray-100/80">
+                <div className="max-w-2xl mx-auto px-5 pt-8 pb-5">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center shadow-md shadow-amber-200">
                             <Trophy size={20} className="text-white" />
@@ -136,37 +137,50 @@ export default function LeaderboardPage() {
                     </div>
 
                     {/* Sort + Filter */}
-                    <div className="flex gap-2">
-                        {(['xp', 'trustScore', 'totalResolved'] as SortBy[]).map(s => (
-                            <button
-                                key={s}
-                                onClick={() => setSortBy(s)}
-                                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${sortBy === s
-                                    ? 'bg-gray-900 text-white shadow-sm'
-                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                                    }`}
-                            >
-                                {getSortLabel(s)}
-                            </button>
-                        ))}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex bg-gray-100/80 p-1 rounded-full relative">
+                            {(['xp', 'trustScore', 'totalResolved'] as SortBy[]).map(s => {
+                                const isActive = sortBy === s;
+                                return (
+                                    <motion.button
+                                        {...tapScale.pill}
+                                        key={s}
+                                        onClick={() => setSortBy(s)}
+                                        className={`relative z-10 px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors cursor-pointer ${
+                                            isActive ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                    >
+                                        {isActive && (
+                                            <motion.div
+                                                layoutId="leaderboardSortTabPill"
+                                                className="absolute inset-0 bg-white rounded-full shadow-xs z-[-1]"
+                                                transition={springJelly}
+                                            />
+                                        )}
+                                        {getSortLabel(s)}
+                                    </motion.button>
+                                );
+                            })}
+                        </div>
                         <div className="flex-1" />
                         {userProfile?.city && (
-                            <button
+                            <motion.button
+                                {...tapScale.pill}
                                 onClick={() => setTimeRange(t => t === 'all' ? 'city' : 'all')}
-                                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${timeRange === 'city'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${timeRange === 'city'
+                                    ? 'bg-blue-600 text-white shadow-xs shadow-blue-500/20'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                     }`}
                             >
                                 {timeRange === 'city' ? userProfile.city : 'All Cities'}
-                            </button>
+                            </motion.button>
                         )}
                     </div>
                 </div>
             </div>
 
             {/* Content */}
-            <div className="max-w-lg mx-auto px-4 pt-4">
+            <div className="max-w-2xl mx-auto px-4 pt-4">
                 {loading ? (
                     <ListSkeleton />
                 ) : entries.length === 0 ? (

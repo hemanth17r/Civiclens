@@ -1,6 +1,10 @@
+'use client';
+
 import React from 'react';
+import { motion } from 'framer-motion';
 import { ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { springJelly, springSnappy } from '@/lib/motion';
 
 export interface StageVoteCardProps {
     stage: any;
@@ -58,41 +62,45 @@ export default function StageVoteCard({
 
             {/* Confidence Bar */}
             <div className="relative h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                <div
+                <motion.div
                     className={clsx(
-                        'h-full transition-all duration-500 ease-out',
+                        'h-full',
                         percentageYes > 60
                             ? 'bg-emerald-500'
                             : percentageYes < 40
                             ? 'bg-rose-500'
                             : 'bg-amber-400'
                     )}
-                    style={{ width: `${percentageYes}%` }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${percentageYes}%` }}
+                    transition={springSnappy}
                 />
             </div>
 
             {/* Vote Buttons with slide-pill animation */}
-            <div className="relative flex rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+            <div className="relative flex rounded-xl overflow-hidden border border-gray-200 bg-gray-50 p-1">
                 {/* Sliding pill indicator — only visible when a vote is cast */}
                 {hasVote && (
-                    <div
+                    <motion.div
+                        layoutId={`votePill-${stage?.key || 'stage'}`}
                         className={clsx(
-                            'absolute inset-y-0 w-1/2 rounded-xl transition-all duration-300 ease-in-out pointer-events-none z-0',
+                            'absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg pointer-events-none z-0',
                             userVote === 'yes'
-                                ? 'left-0 bg-emerald-500'
-                                : 'left-1/2 bg-rose-500'
+                                ? 'left-1 bg-emerald-500 shadow-sm shadow-emerald-500/30'
+                                : 'left-[calc(50%+2px)] bg-rose-500 shadow-sm shadow-rose-500/30'
                         )}
+                        transition={springJelly}
                     />
                 )}
 
                 {/* YES button */}
-                <button
+                <motion.button
+                    whileTap={{ scale: isVoting ? 1 : 0.96 }}
                     onClick={() => !isVoting && onVote('yes')}
                     disabled={isVoting}
                     className={clsx(
-                        'relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors duration-200',
+                        'relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors duration-200 cursor-pointer rounded-lg',
                         isVoting && 'cursor-not-allowed opacity-60',
-                        !isVoting && 'active:scale-95',
                         userVote === 'yes'
                             ? 'text-white'
                             : 'text-gray-500 hover:text-emerald-600'
@@ -106,22 +114,16 @@ export default function StageVoteCard({
                         <ThumbsUp size={15} />
                     )}
                     Yes
-                </button>
-
-                {/* Divider */}
-                <div className={clsx(
-                    'w-px self-stretch transition-opacity duration-300',
-                    hasVote ? 'opacity-0' : 'bg-gray-200 opacity-100'
-                )} />
+                </motion.button>
 
                 {/* NO button */}
-                <button
+                <motion.button
+                    whileTap={{ scale: isVoting ? 1 : 0.96 }}
                     onClick={() => !isVoting && onVote('no')}
                     disabled={isVoting}
                     className={clsx(
-                        'relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors duration-200',
+                        'relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors duration-200 cursor-pointer rounded-lg',
                         isVoting && 'cursor-not-allowed opacity-60',
-                        !isVoting && 'active:scale-95',
                         userVote === 'no'
                             ? 'text-white'
                             : 'text-gray-500 hover:text-rose-600'
@@ -135,7 +137,7 @@ export default function StageVoteCard({
                         <ThumbsDown size={15} />
                     )}
                     No
-                </button>
+                </motion.button>
             </div>
 
             {/* Hint text */}
@@ -154,3 +156,4 @@ export default function StageVoteCard({
         </div>
     );
 }
+

@@ -12,6 +12,8 @@ import Link from 'next/link';
 
 import HeartAnimation from './HeartAnimation';
 import VerifiedBadge from './VerifiedBadge';
+import { motion } from 'framer-motion';
+import { tapScale } from '@/lib/motion';
 
 const AuthModule = dynamic(() => import('./AuthModule'), { ssr: false });
 const CommentDrawer = dynamic(() => import('./CommentDrawer'), { ssr: false });
@@ -214,12 +216,14 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                     </div>
                 </div>
 
-                <button
+                <motion.button
+                    {...tapScale.icon}
                     onClick={handleSaveToggle}
-                    className="text-gray-400 hover:text-gray-900 p-1 transition-colors active:scale-90"
+                    className="text-gray-400 hover:text-gray-900 p-1 transition-colors cursor-pointer"
+                    aria-label="Bookmark"
                 >
                     {isSaved ? <BookmarkCheck size={24} className="text-gray-900 fill-gray-900" /> : <Bookmark size={24} className="text-gray-900" />}
-                </button>
+                </motion.button>
             </div>
 
             {/* 2. Media: 1:1 Aspect Ratio & Double Tap */}
@@ -291,23 +295,27 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
 
                 {/* Status Pill — shows current status, links to timeline */}
                 <div className="absolute top-4 right-4 z-10 flex flex-col items-end gap-2">
-                    <button
+                    <motion.button
+                        whileHover={{ scale: 1.04 }}
+                        whileTap={{ scale: 0.94 }}
                         onClick={handleStatusClick}
                         className={clsx(
-                            "px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md backdrop-blur-md transition-all active:scale-95 border border-white/20 flex items-center gap-1 cursor-pointer hover:opacity-90",
+                            "px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md backdrop-blur-md border border-white/20 flex items-center gap-1 cursor-pointer hover:opacity-90",
                             statusColor
                         )}>
                         {displayStatus}
-                    </button>
+                    </motion.button>
                     {/* Pending Approval Badge */}
                     {issue.status === 'Reported' && (
                         <div className="relative" ref={pendingInfoRef}>
-                            <button
+                            <motion.button
+                                whileHover={{ scale: 1.04 }}
+                                whileTap={{ scale: 0.94 }}
                                 onClick={(e) => { e.stopPropagation(); setShowPendingInfo(v => !v); }}
-                                className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md backdrop-blur-md transition-all active:scale-95 border border-white/20 flex items-center gap-1 cursor-pointer bg-amber-500 text-white hover:opacity-90"
+                                className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md backdrop-blur-md border border-white/20 flex items-center gap-1 cursor-pointer bg-amber-500 text-white hover:opacity-90"
                             >
                                 <Info size={12} /> Pending Approval
-                            </button>
+                            </motion.button>
                             {showPendingInfo && (
                                 <div className="absolute right-0 top-full mt-2 w-[240px] sm:w-64 bg-white border border-gray-100 rounded-2xl shadow-xl p-4 z-20 animate-in fade-in slide-in-from-top-2 duration-200 cursor-default" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex items-center gap-2 mb-2">
@@ -327,9 +335,11 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
             {/* 3. Action Bar */}
             <div className="px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-5">
-                    <button
+                    <motion.button
+                        {...tapScale.icon}
                         onClick={handleHype}
-                        className="flex items-center gap-1.5 transition-transform active:scale-90"
+                        className="flex items-center gap-1.5 cursor-pointer"
+                        aria-label="Hype"
                     >
                         <Flame
                             size={26}
@@ -338,27 +348,31 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                                 hasHyped ? "fill-orange-500 text-orange-500" : "text-gray-900 hover:text-orange-500"
                             )}
                         />
-                    </button>
+                    </motion.button>
 
-                    <button
+                    <motion.button
+                        {...tapScale.icon}
                         onClick={() => setIsCommentOpen(true)}
-                        className="flex items-center gap-1.5 text-gray-900 hover:text-blue-600 transition-colors"
+                        className="flex items-center gap-1.5 text-gray-900 hover:text-blue-600 transition-colors cursor-pointer"
+                        aria-label="Comments"
                     >
                         <MessageCircle size={26} className="text-gray-900" />
                         {(issue.commentCount ?? 0) > 0 && (
                             <span className="text-xs font-semibold text-gray-700">{issue.commentCount}</span>
                         )}
-                    </button>
+                    </motion.button>
 
-                    <button
+                    <motion.button
+                        {...tapScale.icon}
                         onClick={() => setIsShareOpen(true)}
-                        className="flex items-center gap-1.5 text-gray-900 hover:text-blue-600 transition-colors"
+                        className="flex items-center gap-1.5 text-gray-900 hover:text-blue-600 transition-colors cursor-pointer"
+                        aria-label="Share"
                     >
                         <Share2 size={24} />
                         {(issue.sharesCount ?? 0) > 0 && (
                             <span className="text-xs font-semibold text-gray-700">{issue.sharesCount}</span>
                         )}
-                    </button>
+                    </motion.button>
                 </div>
             </div>
 

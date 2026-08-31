@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, X, CheckCheck, Flame, MessageCircle, AlertTriangle, ShieldCheck, Clock } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getNotifications, getUnreadCount, markAsRead, markAllRead, NotificationData } from '@/lib/notifications';
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
+import { dropdownVariants, tapScale } from '@/lib/motion';
 
 // ── Module-level pure helpers — extracted to avoid recreating closures every render ──
 function getNotifIcon(type: string, isUrgent: boolean) {
@@ -112,9 +114,11 @@ export default function NotificationBell() {
     return (
         <div className="relative" ref={dropdownRef}>
             {/* Bell Button */}
-            <button
+            <motion.button
+                {...tapScale.icon}
                 onClick={() => setIsOpen(!isOpen)}
                 className="relative p-2 rounded-full hover:bg-gray-100 transition-colors"
+                aria-label="Notifications"
             >
                 <Bell size={22} className="text-gray-700" />
                 {unread > 0 && (
@@ -122,83 +126,96 @@ export default function NotificationBell() {
                         {unread > 9 ? '9+' : unread}
                     </span>
                 )}
-            </button>
+            </motion.button>
 
             {/* Dropdown */}
-            {isOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 md:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-[100] overflow-hidden">
-                    {/* Header */}
-                    <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                        <h3 className="font-bold text-sm text-gray-900">Notifications</h3>
-                        <div className="flex items-center gap-2">
-                            {unread > 0 && (
-                                <button
-                                    onClick={handleMarkAllRead}
-                                    className="text-xs text-blue-600 font-semibold hover:text-blue-800 flex items-center gap-1"
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        variants={dropdownVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        className="absolute right-0 top-full mt-2 w-80 md:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-[100] overflow-hidden"
+                    >
+                        {/* Header */}
+                        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                            <h3 className="font-bold text-sm text-gray-900">Notifications</h3>
+                            <div className="flex items-center gap-2">
+                                {unread > 0 && (
+                                    <motion.button
+                                        {...tapScale.button}
+                                        onClick={handleMarkAllRead}
+                                        className="text-xs text-blue-600 font-semibold hover:text-blue-800 flex items-center gap-1"
+                                    >
+                                        <CheckCheck size={14} /> Mark all read
+                                    </motion.button>
+                                )}
+                                <motion.button
+                                    {...tapScale.icon}
+                                    onClick={() => setIsOpen(false)}
+                                    className="p-1 hover:bg-gray-100 rounded-full"
                                 >
-                                    <CheckCheck size={14} /> Mark all read
-                                </button>
-                            )}
-                            <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-gray-100 rounded-full">
-                                <X size={16} className="text-gray-400" />
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Notifications List */}
-                    <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-50">
-                        {loading ? (
-                            <div className="p-8 text-center text-gray-400 text-sm">Loading...</div>
-                        ) : notifications.length === 0 ? (
-                            <div className="p-8 text-center">
-                                <Bell size={32} className="text-gray-200 mx-auto mb-2" />
-                                <p className="text-gray-400 text-sm">No notifications yet</p>
+                                    <X size={16} className="text-gray-400" />
+                                </motion.button>
                             </div>
-                        ) : (
-                            notifications.map(notif => (
-                                <div
-                                    key={notif.id}
-                                    onClick={() => handleNotifClick(notif)}
-                                    className={`px-4 py-3 flex gap-3 cursor-pointer hover:bg-gray-50 transition-colors ${getNotifBg(notif)}`}
-                                >
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${notif.isUrgent || notif.type === 'issue_rejected' ? 'bg-red-100' :
-                                        (notif.type === 'status_update' || notif.type === 'author_status' || notif.type === 'issue_approved') ? 'bg-green-100' :
-                                            (notif.type === 'hype' || notif.type === 'author_milestone') ? 'bg-orange-100' :
-                                                'bg-blue-100'
-                                        }`}>
-                                        {getNotifIcon(notif.type, notif.isUrgent)}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className={`text-sm leading-snug ${notif.isUrgent ? 'font-bold text-red-900' : notif.read ? 'text-gray-600' : 'text-gray-900 font-medium'}`}>
-                                            {notif.isUrgent && <span className="text-red-600 mr-1">🚨</span>}
-                                            <span className="font-bold">{notif.title}:</span>{' '}
-                                            {notif.body}
-                                        </p>
-                                        <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
-                                            <Clock size={10} />
-                                            {formatTime(notif.createdAt)}
-                                        </p>
-                                    </div>
-                                    {!notif.read && (
-                                        <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2" />
-                                    )}
-                                </div>
-                            ))
-                        )}
-                    </div>
+                        </div>
 
-                    {/* Footer */}
-                    <div className="border-t border-gray-100 px-4 py-2.5">
-                        <Link
-                            href="/notifications"
-                            onClick={() => setIsOpen(false)}
-                            className="text-xs font-semibold text-blue-600 hover:text-blue-800 w-full text-center block"
-                        >
-                            View all notifications →
-                        </Link>
-                    </div>
-                </div>
-            )}
+                        {/* Notifications List */}
+                        <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-50">
+                            {loading ? (
+                                <div className="p-8 text-center text-gray-400 text-sm">Loading...</div>
+                            ) : notifications.length === 0 ? (
+                                <div className="p-8 text-center">
+                                    <Bell size={32} className="text-gray-200 mx-auto mb-2" />
+                                    <p className="text-gray-400 text-sm">No notifications yet</p>
+                                </div>
+                            ) : (
+                                notifications.map(notif => (
+                                    <div
+                                        key={notif.id}
+                                        onClick={() => handleNotifClick(notif)}
+                                        className={`px-4 py-3 flex gap-3 cursor-pointer hover:bg-gray-50 transition-colors ${getNotifBg(notif)}`}
+                                    >
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${notif.isUrgent || notif.type === 'issue_rejected' ? 'bg-red-100' :
+                                            (notif.type === 'status_update' || notif.type === 'author_status' || notif.type === 'issue_approved') ? 'bg-green-100' :
+                                                (notif.type === 'hype' || notif.type === 'author_milestone') ? 'bg-orange-100' :
+                                                    'bg-blue-100'
+                                            }`}>
+                                            {getNotifIcon(notif.type, notif.isUrgent)}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-sm leading-snug ${notif.isUrgent ? 'font-bold text-red-900' : notif.read ? 'text-gray-600' : 'text-gray-900 font-medium'}`}>
+                                                {notif.isUrgent && <span className="text-red-600 mr-1">🚨</span>}
+                                                <span className="font-bold">{notif.title}:</span>{' '}
+                                                {notif.body}
+                                            </p>
+                                            <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
+                                                <Clock size={10} />
+                                                {formatTime(notif.createdAt)}
+                                            </p>
+                                        </div>
+                                        {!notif.read && (
+                                            <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2" />
+                                        )}
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="border-t border-gray-100 px-4 py-2.5">
+                            <Link
+                                href="/notifications"
+                                onClick={() => setIsOpen(false)}
+                                className="text-xs font-semibold text-blue-600 hover:text-blue-800 w-full text-center block"
+                            >
+                                View all notifications →
+                            </Link>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

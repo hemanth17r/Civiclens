@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { tapScale } from '@/lib/motion';
 import { Loader2, Clock, Target, Trophy, Zap, ChevronRight, Sparkles } from 'lucide-react';
 import {
     getActiveMissions, getUserMissionProgress, seedMissionsForCity,
@@ -88,8 +89,8 @@ export default function MissionsPage() {
     return (
         <div className="min-h-screen bg-white pb-24">
             {/* Header */}
-            <div className="bg-white">
-                <div className="max-w-lg mx-auto px-5 pt-8 pb-5">
+            <div className="bg-white border-b border-gray-100/80">
+                <div className="max-w-2xl mx-auto px-5 pt-8 pb-5">
                     <div className="flex items-center gap-3 mb-1">
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md shadow-orange-200">
                             <Sparkles size={20} className="text-white" />
@@ -103,7 +104,7 @@ export default function MissionsPage() {
             </div>
 
             {/* Content */}
-            <div className="max-w-lg mx-auto px-4 pt-5">
+            <div className="max-w-2xl mx-auto px-4 pt-5">
                 {loading ? (
                     <div className="space-y-4">
                         {[1, 2, 3].map((i) => (
@@ -138,14 +139,15 @@ export default function MissionsPage() {
                                 : 'Set your city in your profile to see local missions.'}
                         </p>
                         {userProfile?.city && (
-                            <button
+                            <motion.button
+                                {...tapScale.button}
                                 onClick={handleSeedMissions}
                                 disabled={seeding}
-                                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition-all disabled:opacity-60"
+                                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-sm rounded-full shadow-md shadow-orange-500/20 hover:shadow-lg transition-all disabled:opacity-60 cursor-pointer"
                             >
                                 {seeding ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
                                 {seeding ? 'Creating...' : 'Generate Missions'}
-                            </button>
+                            </motion.button>
                         )}
                     </div>
                 ) : (

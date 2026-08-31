@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
+import { tapScale } from '@/lib/motion';
 
 export default function CityInsightsPage() {
     const { userProfile } = useAuth();
@@ -177,7 +179,8 @@ export default function CityInsightsPage() {
                     const resolvedAge = issue._resolvedAge ?? null;
 
                     return (
-                        <div
+                        <motion.div
+                            whileTap={{ scale: 0.98 }}
                             key={issue.id}
                             className="p-4 flex gap-4 items-center hover:bg-gray-50 transition-colors cursor-pointer"
                             onClick={() => router.push(`/issue/${issue.id}`)}
@@ -213,7 +216,7 @@ export default function CityInsightsPage() {
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </motion.div>
                     );
                 })}
             </div>
@@ -221,35 +224,37 @@ export default function CityInsightsPage() {
     };
 
     return (
-        <div className="min-h-screen bg-white pb-24 md:pb-4">
-            {/* Hero */}
-            <div className="bg-gray-900 text-white px-6 pt-8 pb-14 shadow-md">
-                <div className="max-w-3xl mx-auto">
-                    <div className="flex items-center gap-2 mb-1">
-                        <Map size={18} className="text-gray-400" />
-                        <span className="text-xs font-extrabold uppercase tracking-wider text-gray-400">City Insights</span>
+        <div className="min-h-screen bg-white pb-24 md:pb-8">
+            {/* Clean Light Hero Header */}
+            <div className="bg-gradient-to-b from-blue-50/60 to-white px-6 pt-8 pb-6 border-b border-gray-100/80">
+                <div className="max-w-2xl mx-auto">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100/70 text-blue-700 rounded-full mb-3 shadow-xs">
+                        <Map size={14} className="text-blue-600" />
+                        <span className="text-[11px] font-bold uppercase tracking-wider">City Insights</span>
                     </div>
-                    <h1 className="text-3xl font-black mt-2 tracking-tight">Civic Pulse in {userCity}</h1>
-                    <p className="text-gray-300 text-sm mt-1.5 font-medium">Tracking the leadership and progress within your community.</p>
+                    <h1 className="text-3xl font-black tracking-tight text-gray-900">Civic Pulse in {userCity}</h1>
+                    <p className="text-gray-500 text-sm mt-1.5 font-medium leading-relaxed">
+                        Tracking leadership, active improvements, and verified progress within your community.
+                    </p>
                 </div>
             </div>
 
-            <div className="max-w-3xl mx-auto px-4 -mt-8 space-y-6">
+            <div className="max-w-2xl mx-auto px-4 pt-6 space-y-6">
 
                 {/* ── TOP CONTRIBUTORS ─────────────────────── */}
-                <div className="bg-white rounded-2xl border border-amber-100 shadow-xl overflow-hidden relative">
+                <div className="bg-white rounded-2xl border border-amber-100/80 shadow-sm overflow-hidden relative">
                     <div className="px-5 py-4 border-b border-amber-50 flex items-center justify-between bg-gradient-to-r from-amber-50/50 to-white">
                         <div className="flex items-center gap-2">
                             <Trophy size={18} className="text-amber-500" />
-                            <h2 className="font-black text-gray-900 tracking-tight">Top Contributors</h2>
+                            <h2 className="font-bold text-gray-900 tracking-tight">Top Contributors</h2>
                         </div>
-                        <span className="text-[10px] font-black text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Leaders</span>
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Leaders</span>
                     </div>
                     {renderLeaderboard()}
                 </div>
 
                 {/* ── TOP IN PROGRESS ─────────────────────── */}
-                <div className="bg-white rounded-2xl border border-blue-100 shadow-md overflow-hidden relative">
+                <div className="bg-white rounded-2xl border border-blue-100/80 shadow-sm overflow-hidden relative">
                     <div className="px-5 py-4 border-b border-blue-50 flex items-center justify-between bg-gradient-to-r from-blue-50/50 to-white">
                         <div className="flex items-center gap-2">
                             <Clock size={18} className="text-blue-600" />
@@ -261,7 +266,7 @@ export default function CityInsightsPage() {
                 </div>
 
                 {/* ── TOP RESOLVED ─────────────────────── */}
-                <div className="bg-white rounded-2xl border border-emerald-100 shadow-md overflow-hidden relative">
+                <div className="bg-white rounded-2xl border border-emerald-100/80 shadow-sm overflow-hidden relative">
                     <div className="px-5 py-4 border-b border-emerald-50 flex items-center justify-between bg-gradient-to-r from-emerald-50/50 to-white">
                         <div className="flex items-center gap-2">
                             <CheckCircle size={18} className="text-emerald-600" />
@@ -272,8 +277,8 @@ export default function CityInsightsPage() {
                     {renderIssueList(enrichedResolved, `No recently resolved issues in ${userCity}.`, 'resolved')}
                 </div>
 
-                <div className="text-center pb-8 pt-4">
-                    <p className="text-xs text-gray-400 flex items-center justify-center gap-1.5 font-semibold uppercase tracking-widest bg-gray-100/50 w-fit mx-auto px-4 py-1.5 rounded-full">
+                <div className="text-center pb-6 pt-2">
+                    <p className="text-xs text-gray-400 flex items-center justify-center gap-1.5 font-semibold uppercase tracking-widest bg-gray-50 border border-gray-100 w-fit mx-auto px-4 py-1.5 rounded-full">
                         <span className="relative flex h-2 w-2">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>

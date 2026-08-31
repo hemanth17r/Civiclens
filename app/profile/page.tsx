@@ -16,6 +16,7 @@ import IssueCard from '@/components/IssueCard';
 import FeedSkeleton from '@/components/FeedSkeleton';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { springJelly, tapScale } from '@/lib/motion';
 import { clsx } from 'clsx';
 import dynamic from 'next/dynamic';
 import { INDIAN_CITIES_SORTED_BY_TIER } from '@/data/cities';
@@ -510,23 +511,43 @@ export default function ProfilePage() {
                 </div>
             )}
 
-            {/* IG Tabs & Content */}
+            {/* Floating Spring Capsule Tabs & Content */}
             <div className="space-y-6">
-                <div className="flex border-b border-gray-100">
-                    <button
+                <div className="flex bg-gray-100/80 p-1 rounded-full relative">
+                    <motion.button
+                        {...tapScale.pill}
                         onClick={() => setActiveTab('reports')}
-                        className={clsx("flex-1 py-3.5 flex items-center justify-center gap-2 border-b-2 transition-colors", activeTab === 'reports' ? "border-blue-600 text-blue-600 font-bold" : "border-transparent text-gray-400 font-semibold")}
+                        className={`relative z-10 flex-1 py-2.5 flex items-center justify-center gap-2 rounded-full text-xs font-bold transition-colors cursor-pointer ${
+                            activeTab === 'reports' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                        }`}
                     >
-                        <FileText size={20} />
+                        {activeTab === 'reports' && (
+                            <motion.div
+                                layoutId="profileMainTabPill"
+                                className="absolute inset-0 bg-white rounded-full shadow-xs z-[-1]"
+                                transition={springJelly}
+                            />
+                        )}
+                        <FileText size={16} />
                         <span>Reports ({myReports.length})</span>
-                    </button>
-                    <button
+                    </motion.button>
+                    <motion.button
+                        {...tapScale.pill}
                         onClick={() => setActiveTab('activity')}
-                        className={clsx("flex-1 py-3.5 flex items-center justify-center gap-2 border-b-2 transition-colors", activeTab === 'activity' ? "border-blue-600 text-blue-600 font-bold" : "border-transparent text-gray-400 font-semibold")}
+                        className={`relative z-10 flex-1 py-2.5 flex items-center justify-center gap-2 rounded-full text-xs font-bold transition-colors cursor-pointer ${
+                            activeTab === 'activity' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                        }`}
                     >
-                        <Heart size={20} />
+                        {activeTab === 'activity' && (
+                            <motion.div
+                                layoutId="profileMainTabPill"
+                                className="absolute inset-0 bg-white rounded-full shadow-xs z-[-1]"
+                                transition={springJelly}
+                            />
+                        )}
+                        <Heart size={16} />
                         <span>My Activity</span>
-                    </button>
+                    </motion.button>
                 </div>
 
                 <div>
@@ -553,37 +574,58 @@ export default function ProfilePage() {
                     ) : (
                         <>
                             {/* Activity Subtabs: Hyped | Commented | Saved */}
-                            <div className="flex bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden">
-                                <button
+                            <div className="flex bg-gray-100/70 p-1 rounded-full mb-6 relative">
+                                <motion.button
+                                    {...tapScale.pill}
                                     onClick={() => setActivitySubTab('hyped')}
-                                    className={clsx(
-                                        "flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
-                                        activitySubTab === 'hyped' ? "border-orange-500 text-orange-600 bg-orange-50/50" : "border-transparent text-gray-400 hover:text-gray-600"
-                                    )}
+                                    className={`relative z-10 flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-full transition-colors cursor-pointer ${
+                                        activitySubTab === 'hyped' ? 'text-orange-600' : 'text-gray-500 hover:text-gray-700'
+                                    }`}
                                 >
-                                    <Flame size={18} />
-                                    Hyped
-                                </button>
-                                <button
+                                    {activitySubTab === 'hyped' && (
+                                        <motion.div
+                                            layoutId="profileActivityTabPill"
+                                            className="absolute inset-0 bg-white rounded-full shadow-xs z-[-1]"
+                                            transition={springJelly}
+                                        />
+                                    )}
+                                    <Flame size={15} />
+                                    <span>Hyped</span>
+                                </motion.button>
+                                <motion.button
+                                    {...tapScale.pill}
                                     onClick={() => setActivitySubTab('commented')}
-                                    className={clsx(
-                                        "flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
-                                        activitySubTab === 'commented' ? "border-blue-500 text-blue-600 bg-blue-50/50" : "border-transparent text-gray-400 hover:text-gray-600"
-                                    )}
+                                    className={`relative z-10 flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-full transition-colors cursor-pointer ${
+                                        activitySubTab === 'commented' ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                                    }`}
                                 >
-                                    <MessageCircle size={18} />
-                                    Commented
-                                </button>
-                                <button
+                                    {activitySubTab === 'commented' && (
+                                        <motion.div
+                                            layoutId="profileActivityTabPill"
+                                            className="absolute inset-0 bg-white rounded-full shadow-xs z-[-1]"
+                                            transition={springJelly}
+                                        />
+                                    )}
+                                    <MessageCircle size={15} />
+                                    <span>Commented</span>
+                                </motion.button>
+                                <motion.button
+                                    {...tapScale.pill}
                                     onClick={() => setActivitySubTab('saved')}
-                                    className={clsx(
-                                        "flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold transition-colors border-b-2",
-                                        activitySubTab === 'saved' ? "border-gray-900 text-gray-900 bg-gray-50" : "border-transparent text-gray-400 hover:text-gray-600"
-                                    )}
+                                    className={`relative z-10 flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-bold rounded-full transition-colors cursor-pointer ${
+                                        activitySubTab === 'saved' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                                    }`}
                                 >
-                                    <Bookmark size={18} />
-                                    Saved
-                                </button>
+                                    {activitySubTab === 'saved' && (
+                                        <motion.div
+                                            layoutId="profileActivityTabPill"
+                                            className="absolute inset-0 bg-white rounded-full shadow-xs z-[-1]"
+                                            transition={springJelly}
+                                        />
+                                    )}
+                                    <Bookmark size={15} />
+                                    <span>Saved</span>
+                                </motion.button>
                             </div>
 
                             {loadingActivity ? (

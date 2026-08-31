@@ -6,7 +6,9 @@ import React, { useState, useCallback } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import BottomNav from './BottomNav';
+import { useAuth } from '@/context/AuthContext';
 const ReportIssueDialog = dynamic(() => import('./ReportIssueDialog'), { ssr: false });
+const AuthModule = dynamic(() => import('./AuthModule'), { ssr: false });
 const OnboardingModal = dynamic(() => import('./OnboardingModal'), { ssr: false });
 const PWAInstallPrompt = dynamic(() => import('./PWAInstallPrompt'), { ssr: false });
 import NotificationBell from './NotificationBell';
@@ -16,10 +18,19 @@ interface ShellProps {
 }
 
 export default function Shell({ children }: ShellProps) {
+    const { user } = useAuth();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-    const openReportDialog = useCallback(() => setIsReportDialogOpen(true), []);
+    const handleReportClick = useCallback(() => {
+        if (!user) {
+            setIsAuthModalOpen(true);
+        } else {
+            setIsReportDialogOpen(true);
+        }
+    }, [user]);
+
     const closeReportDialog = useCallback(() => setIsReportDialogOpen(false), []);
 
     return (
@@ -31,7 +42,7 @@ export default function Shell({ children }: ShellProps) {
             <div className="hidden md:block fixed top-0 left-0 right-0 z-30">
                 <Header
                     toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-                    onReportClick={openReportDialog}
+                    onReportClick={handleReportClick}
                 />
             </div>
 
@@ -57,13 +68,19 @@ export default function Shell({ children }: ShellProps) {
 
             {/* Mobile Bottom Nav */}
             <div className="md:hidden">
-                <BottomNav onReportClick={openReportDialog} />
+                <BottomNav onReportClick={handleReportClick} />
             </div>
 
             {/* Desktop Dialog (Mobile uses FAB via BottomNav) */}
             <ReportIssueDialog
                 isOpen={isReportDialogOpen}
                 onClose={closeReportDialog}
+            />
+
+            <AuthModule
+                isOpen={isAuthModalOpen}
+                onClose={() => setIsAuthModalOpen(false)}
+                triggerAction="to report an issue"
             />
 
             <OnboardingModal />

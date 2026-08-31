@@ -7,6 +7,7 @@ import { Compass, Map, Bell, User, LayoutDashboard } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
+import { springSnappy } from '@/lib/motion';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -27,19 +28,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   ];
 
   return (
-    <div
-      className="relative h-full transition-all duration-300 ease-in-out flex-shrink-0"
-      style={{ width: isOpen ? 256 : 72 }}
+    <motion.div
+      initial={false}
+      animate={{ width: isOpen ? 256 : 72 }}
+      transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+      className="relative h-full flex-shrink-0"
     >
-      <motion.aside
-        initial={false}
-        animate={{
-          width: isVisualOpen ? 256 : 72,
-          boxShadow: "none"
-        }}
-        transition={{ type: 'spring', stiffness: 400, damping: 40 }}
+      <aside
         className={clsx(
-          "bg-white flex flex-col h-full overflow-hidden absolute left-0 top-0 bottom-0 z-40"
+          "bg-white flex flex-col h-full overflow-hidden absolute left-0 top-0 bottom-0 z-40 w-full"
         )}
       >
         <div className="flex flex-col gap-1.5 p-3">
@@ -47,35 +44,37 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
             const isActive = pathname === item.href;
             const isSpecial = item.href === '/official' || item.href === '/admin/add-official' || item.href === '/admin/dashboard';
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={clsx(
-                  "flex items-center gap-4 px-5 py-3.5 rounded-full transition-all duration-200 min-w-max",
-                  isSpecial
-                    ? isActive
-                      ? "bg-blue-100 text-blue-900 font-bold"
-                      : "text-blue-600 hover:bg-blue-50 border border-blue-200/40"
-                    : isActive
-                      ? "bg-blue-100 text-blue-900 font-bold"
-                      : "text-gray-700 hover:bg-gray-200/60"
-                )}
-              >
-                <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} />
-                <motion.span
-                  animate={{ opacity: isVisualOpen ? 1 : 0, display: isVisualOpen ? "block" : "none" }}
-                  transition={{ duration: 0.15 }}
-                  className="whitespace-nowrap text-sm font-medium"
+              <motion.div key={item.href} whileTap={{ scale: 0.96 }} transition={springSnappy}>
+                <Link
+                  href={item.href}
+                  className={clsx(
+                    "flex items-center gap-4 px-5 py-3.5 rounded-full transition-colors duration-150 min-w-max",
+                    isSpecial
+                      ? isActive
+                        ? "bg-blue-100 text-blue-900 font-bold"
+                        : "text-blue-600 hover:bg-blue-50 border border-blue-200/40"
+                      : isActive
+                        ? "bg-blue-100 text-blue-900 font-bold"
+                        : "text-gray-700 hover:bg-gray-200/60"
+                  )}
                 >
-                  {item.name}
-                </motion.span>
-              </Link>
+                  <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                  <motion.span
+                    animate={{ opacity: isVisualOpen ? 1 : 0, display: isVisualOpen ? "block" : "none" }}
+                    transition={{ duration: 0.15 }}
+                    className="whitespace-nowrap text-sm font-medium"
+                  >
+                    {item.name}
+                  </motion.span>
+                </Link>
+              </motion.div>
             );
           })}
         </div>
-      </motion.aside>
-    </div>
+      </aside>
+    </motion.div>
   );
 };
 
 export default Sidebar;
+

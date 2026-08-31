@@ -17,6 +17,8 @@ import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import PullToRefresh from 'react-simple-pull-to-refresh';
 import SemanticOverview from '@/components/SemanticOverview';
+import { motion } from 'framer-motion';
+import { tapScale } from '@/lib/motion';
 
 // User States:
 //   'A' = Guest (not logged in)
@@ -55,18 +57,19 @@ function HeroSection({
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                    <button
+                    <motion.button
+                        {...tapScale.button}
                         onClick={onReportClick}
                         className={clsx(
-                            'group flex items-center justify-center gap-2 px-8 py-3.5 font-semibold rounded-xl transition-all border',
+                            'group flex items-center justify-center gap-2 px-8 py-3.5 font-semibold rounded-full transition-all border cursor-pointer',
                             userState === 'A'
-                                ? 'w-full sm:w-auto border-blue-600 bg-blue-600 hover:bg-blue-700 text-white shadow-[0_1px_3px_0_rgba(0,0,0,0.1),0_1px_2px_0_rgba(0,0,0,0.06),inset_0_1px_0_0_rgba(255,255,255,0.15)] hover:shadow-[0_4px_6px_-1px_rgba(37,99,235,0.15),0_2px_4px_-1px_rgba(37,99,235,0.1)] hover:-translate-y-[0.5px] active:translate-y-0'
+                                ? 'w-full sm:w-auto border-blue-600 bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20'
                                 : 'w-full border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm'
                         )}
                     >
                         Make Impact
                         <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                    </button>
+                    </motion.button>
                 </div>
             </div>
         </div>
@@ -208,12 +211,13 @@ export default function Home() {
                         <p className="text-xs text-gray-500 mb-4">
                             We'll show you issues from your city and 5 nearby areas.
                         </p>
-                        <button
+                        <motion.button
+                            {...tapScale.button}
                             onClick={() => router.push('/profile')}
-                            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition-all shadow-sm"
+                            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-full transition-all shadow-sm shadow-blue-500/20 cursor-pointer"
                         >
                             Go to Profile → Set City
-                        </button>
+                        </motion.button>
                     </div>
                 )}
 
@@ -248,12 +252,13 @@ export default function Home() {
                                         )
                                 )}
 
-                                <button
+                                <motion.button
+                                    {...tapScale.button}
                                     onClick={() => router.push('/explore')}
-                                    className="w-full py-4 text-center text-blue-600 font-semibold bg-white border border-blue-100 rounded-xl hover:bg-blue-50 transition-colors mt-4 shadow-sm"
+                                    className="w-full py-3.5 text-center text-blue-600 font-semibold bg-white border border-blue-100 rounded-full hover:bg-blue-50 transition-colors mt-4 shadow-xs cursor-pointer block"
                                 >
                                     View All in Explore
-                                </button>
+                                </motion.button>
                             </>
                         )}
                     </div>

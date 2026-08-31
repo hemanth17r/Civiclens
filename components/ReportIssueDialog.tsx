@@ -6,7 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createIssue } from '@/lib/issues';
 import { useAuth } from '@/context/AuthContext';
 import { INDIAN_CITIES } from '@/data/cities';
-import { supabase, getAuthenticatedSupabase } from '@/lib/supabase';
+import { getAuthenticatedSupabase } from '@/lib/supabase';
+import { backdropVariants, modalVariants, tapScale } from '@/lib/motion';
 
 interface ReportIssueDialogProps {
     isOpen: boolean;
@@ -63,7 +64,7 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                 const uniqueName = Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9.\-_]/g, '');
                 const filePath = `${user.uid}/${uniqueName}`;
                 
-                const { data, error } = await authSupabase.storage
+                const { error } = await authSupabase.storage
                     .from('media')
                     .upload(filePath, file);
 
@@ -91,7 +92,7 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                 description,
                 location,
                 mediaUrls: uploadedUrls,
-                imageUrl: uploadedUrls.length > 0 ? uploadedUrls[0] : null, // Fallback for IssueCard expecting a primary image
+                imageUrl: uploadedUrls.length > 0 ? uploadedUrls[0] : null,
                 userId: user.uid,
             };
 
@@ -124,7 +125,7 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
         setSelectedCityName(null);
         setMediaFiles([]);
         setMediaPreviews([]);
-    }
+    };
 
     const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files) return;
@@ -160,28 +161,31 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                 <>
                     {/* Backdrop */}
                     <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
+                        variants={backdropVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
                         onClick={onClose}
                         className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
                     />
 
                     {/* Dialog */}
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                        variants={modalVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
                         className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-full max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col"
                     >
                         <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
                             <h2 className="text-xl font-bold text-gray-900">Report an Issue</h2>
-                            <button
+                            <motion.button
+                                {...tapScale.icon}
                                 onClick={onClose}
                                 className="p-2 hover:bg-gray-100 rounded-full text-gray-500 transition-colors"
                             >
                                 <X size={20} />
-                            </button>
+                            </motion.button>
                         </div>
 
                         <div className="overflow-y-auto flex-1 p-6">
@@ -240,7 +244,8 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                                     </p>
                                     <div className="flex flex-wrap gap-2">
                                         {categories.map((c) => (
-                                            <button
+                                            <motion.button
+                                                {...tapScale.pill}
                                                 key={c}
                                                 type="button"
                                                 onClick={() => setCategory(c)}
@@ -250,7 +255,7 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                                                     }`}
                                             >
                                                 {c}
-                                            </button>
+                                            </motion.button>
                                         ))}
                                     </div>
                                 </div>
@@ -265,20 +270,20 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                                         onChange={(e) => {
                                             setCitySearch(e.target.value);
                                             setIsCityDropdownOpen(true);
-                                            setSelectedCityName(null); // Reset selection on type
+                                            setSelectedCityName(null);
                                         }}
                                         onClick={() => setIsCityDropdownOpen(true)}
                                         className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all outline-none relative z-0 placeholder-gray-400"
-                                        placeholder="Select City (e.g. Jalandhar)"
+                                        placeholder={selectedCityName ? `City: ${selectedCityName}` : "Select City (e.g. Jalandhar)"}
                                     />
 
                                     {/* Dropdown */}
                                     {isCityDropdownOpen && citySearch.length > 0 && (
                                         <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-100 max-h-48 overflow-y-auto z-20">
                                             {filteredCities.length > 0 ? (
-                                                filteredCities.map(city => (
+                                                filteredCities.map((city) => (
                                                     <button
-                                                        key={city.name}
+                                                        key={`${city.name}-${city.state}`}
                                                         type="button"
                                                         onClick={() => {
                                                             setCitySearch(city.name);
@@ -302,8 +307,9 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                                     type="text"
                                     value={location}
                                     onChange={(e) => setLocation(e.target.value)}
+                                    placeholder="Specific Area / Landmark (e.g. Near Metro Station)"
                                     className="w-full p-3 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-blue-100 placeholder-gray-400"
-                                    placeholder="Specific Location (e.g. Near Bus Stand)"
+                                    required
                                 />
 
                                 <textarea
@@ -313,14 +319,15 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                                     className="w-full p-3 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-blue-100 h-24 resize-none placeholder-gray-400"
                                 />
 
-                                <button
+                                <motion.button
+                                    {...tapScale.button}
                                     type="submit"
                                     disabled={loading}
                                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-md hover:shadow-lg"
                                 >
                                     {loading ? <Loader2 className="animate-spin" /> : <Send size={20} />}
                                     Submit Report
-                                </button>
+                                </motion.button>
                             </form>
                         </div>
                     </motion.div>
