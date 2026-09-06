@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { getFeedIssues, Issue } from '@/lib/issues';
+import { setPendingIntent } from '@/lib/authIntents';
 import IssueCard from '@/components/IssueCard';
 const ReportIssueDialog = dynamic(() => import('@/components/ReportIssueDialog'), { ssr: false });
 const AuthModule = dynamic(() => import('@/components/AuthModule'), { ssr: false });
@@ -167,9 +168,22 @@ export default function Home() {
         fetchFeed();
     }, [fetchFeed]);
 
+    // Auto-open report dialog if user authenticated with REPORT_ISSUE intent
+    useEffect(() => {
+        const handleIntentExecuted = (e: Event) => {
+            const customEvent = e as CustomEvent;
+            if (customEvent.detail?.type === 'REPORT_ISSUE') {
+                setIsReportDialogOpen(true);
+            }
+        };
+        window.addEventListener('civiclens:intent-executed', handleIntentExecuted);
+        return () => window.removeEventListener('civiclens:intent-executed', handleIntentExecuted);
+    }, []);
+
     // ── Handlers ─────────────────────────────────────────────────────────────
     const handleReportClick = () => {
         if (!user) {
+            setPendingIntent({ type: 'REPORT_ISSUE' });
             setAuthTrigger('to report an issue');
             setIsAuthModalOpen(true);
         } else {

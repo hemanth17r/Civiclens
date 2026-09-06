@@ -92,14 +92,14 @@ service cloud.firestore {
 
       // Comments subcollection (stored as issues/{issueId}/comments/{commentId})
       match /comments/{commentId} {
-        allow read: if isAuthenticated();
+        allow read: if true;
         allow create: if isAuthenticated() && isNotBlocked() && request.resource.data.userId == request.auth.uid;
         allow update: if isAuthenticated() && isOwner(resource.data.userId);
         allow delete: if isAuthenticated() && isOwner(resource.data.userId);
 
         // Replies subcollection
         match /replies/{replyId} {
-          allow read: if isAuthenticated();
+          allow read: if true;
           allow create: if isAuthenticated() && isNotBlocked() && request.resource.data.userId == request.auth.uid;
           allow update: if isAuthenticated() && isOwner(resource.data.userId);
           allow delete: if isAuthenticated() && isOwner(resource.data.userId);
@@ -107,7 +107,7 @@ service cloud.firestore {
 
         // Comment likes subcollection
         match /likes/{likeUserId} {
-          allow read: if isAuthenticated();
+          allow read: if true;
           allow create: if isAuthenticated() && isOwner(likeUserId);
           allow delete: if isAuthenticated() && isOwner(likeUserId);
           allow update: if false;
@@ -177,7 +177,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
     }
     match /{path=**}/comments/{commentId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
     }
   }
 }

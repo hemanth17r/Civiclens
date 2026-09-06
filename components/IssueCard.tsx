@@ -5,6 +5,7 @@ import { MapPin, Flame, MessageCircle, Bookmark, User, Share2, BookmarkCheck, Ch
 import { formatDistanceToNow } from 'date-fns';
 import { clsx } from 'clsx';
 import { Issue, hypeIssue, unhypeIssue, hasUserHyped, saveIssue, unsaveIssue, hasUserSaved } from '@/lib/issues';
+import { setPendingIntent } from '@/lib/authIntents';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -124,8 +125,31 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
         }
     }, [issue.status]);
 
+    // Listen for auto-executed intents on this issue after login
+    useEffect(() => {
+        const handleIntentExecuted = (e: Event) => {
+            const customEvent = e as CustomEvent;
+            const intent = customEvent.detail;
+            if (!intent) return;
+            if (intent.issueId === issue.id) {
+                if (intent.type === 'HYPE') {
+                    setHasHyped(true);
+                    setOptimisticVotes(prev => prev + 1);
+                    setShowHeartAnim(true);
+                    setTimeout(() => setShowHeartAnim(false), 1000);
+                } else if (intent.type === 'SAVE') {
+                    setIsSaved(true);
+                }
+            }
+        };
+
+        window.addEventListener('civiclens:intent-executed', handleIntentExecuted);
+        return () => window.removeEventListener('civiclens:intent-executed', handleIntentExecuted);
+    }, [issue.id]);
+
     const handleHype = useCallback(async () => {
         if (!user) {
+            setPendingIntent({ type: 'HYPE', issueId: issue.id });
             setAuthTrigger("to hype this issue");
             setIsAuthModalOpen(true);
             return;
@@ -163,6 +187,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
 
     const handleSaveToggle = useCallback(async () => {
         if (!user) {
+            setPendingIntent({ type: 'SAVE', issueId: issue.id });
             setAuthTrigger("to save this issue");
             setIsAuthModalOpen(true);
             return;

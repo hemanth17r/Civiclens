@@ -73,7 +73,7 @@ export default function AuthModule({ isOpen, onClose, triggerAction = "to join t
                             <p className="text-gray-500 mb-8 max-w-[250px] mx-auto text-sm">
                                 {isSent
                                     ? "Check your inbox for the magic link to complete sign in."
-                                    : "Sign in or sign up to continue."}
+                                    : `Sign in or sign up ${triggerAction}.`}
                             </p>
 
                             {!isSent ? (

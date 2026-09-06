@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { getFollowers, getFollowing, getFollowStatus, followUser, unfollowUser } from '@/lib/followers';
 import { useRouter } from 'next/navigation';
 import { backdropVariants, modalVariants, tapScale } from '@/lib/motion';
+import AuthModule from './AuthModule';
 
 interface ConnectionsModalProps {
     isOpen: boolean;
@@ -19,6 +20,7 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
     const { user: currentUser } = useAuth();
     const router = useRouter();
 
+    const [isAuthOpen, setIsAuthOpen] = useState(false);
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -76,7 +78,10 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
 
     const handleFollowToggle = async (targetId: string, e: React.MouseEvent) => {
         e.stopPropagation(); // prevent navigation
-        if (!currentUser) return;
+        if (!currentUser) {
+            setIsAuthOpen(true);
+            return;
+        }
 
         setActionLoading(prev => ({ ...prev, [targetId]: true }));
         try {
@@ -232,6 +237,12 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
                             )}
                         </div>
                     </motion.div>
+
+                    <AuthModule
+                        isOpen={isAuthOpen}
+                        onClose={() => setIsAuthOpen(false)}
+                        triggerAction="to follow citizens"
+                    />
                 </div>
             )}
         </AnimatePresence>

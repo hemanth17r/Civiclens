@@ -26,6 +26,7 @@ import { getUserTrustStats, getVoteWeightTier } from '@/lib/trust';
 import { getUserCityRank } from '@/lib/users';
 import { LevelBadge, XpProgressBar, TrustBadge, BadgeGrid, StreakDisplay } from '@/components/GamificationUI';
 import VerifiedBadge from '@/components/VerifiedBadge';
+import AuthModule from '@/components/AuthModule';
 
 const AchievementGallery = dynamic(() => import('@/components/AchievementGallery'), {
     ssr: false,
@@ -42,6 +43,7 @@ type ActivitySubTab = 'hyped' | 'commented' | 'saved';
 export default function ProfilePage() {
     const { user, userProfile, logout, isAdmin, profileChecked, loading: authLoading } = useAuth();
     const router = useRouter();
+    const [showAuthModal, setShowAuthModal] = useState(false);
 
     const [activeTab, setActiveTab] = useState<'reports' | 'activity'>('reports');
     const [myReports, setMyReports] = useState<Issue[]>([]);
@@ -348,7 +350,18 @@ export default function ProfilePage() {
                     <User size={40} className="text-gray-300" />
                 </div>
                 <h1 className="text-xl font-bold text-gray-900 mb-1">{"You're not logged in"}</h1>
-                <p className="text-gray-500 text-sm">Sign in to see your profile and reports.</p>
+                <p className="text-gray-500 text-sm mb-6">Sign in to see your profile, civic stats, and reports.</p>
+                <button
+                    onClick={() => setShowAuthModal(true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-full shadow-md transition-all text-sm cursor-pointer"
+                >
+                    Sign In
+                </button>
+                <AuthModule
+                    isOpen={showAuthModal}
+                    onClose={() => setShowAuthModal(false)}
+                    triggerAction="to view your profile"
+                />
             </div>
         );
     }

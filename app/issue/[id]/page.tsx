@@ -7,7 +7,9 @@ import { clsx } from 'clsx';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
 import StageVoteCard from '@/components/StageVoteCard';
+import AuthModule from '@/components/AuthModule';
 import { getIssueById, getUserStatusVotes, Issue, IssueStatusState, normalizeStatus, voteOnStatus, STATUS_DB_KEYS } from '@/lib/issues';
+import { setPendingIntent } from '@/lib/authIntents';
 import { deleteDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { motion } from 'framer-motion';
@@ -98,6 +100,9 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     // Per-stage user vote tracking: stageKey -> 'yes' | 'no' | null
     const [userVotes, setUserVotes] = useState<Record<string, 'yes' | 'no' | null>>({});
 
+    const [isAuthOpen, setIsAuthOpen] = useState(false);
+    const [authTrigger, setAuthTrigger] = useState("to vote on issue verification");
+
     const unwrappedParams = React.use(params);
     const issueId = unwrappedParams.id;
 
@@ -155,6 +160,27 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
             .catch(() => {});
     }, [issueId, user?.uid]);
 
+    // Listen for auto-executed voting intent after login
+    useEffect(() => {
+        const handleIntentExecuted = (e: Event) => {
+            const customEvent = e as CustomEvent;
+            const intent = customEvent.detail;
+            if (!intent) return;
+            if (intent.type === 'VOTE_STATUS' && intent.issueId === issueId) {
+                setUserVotes(prev => ({
+                    ...prev,
+                    [intent.stageKey]: intent.voteType
+                }));
+                getIssueById(issueId).then(data => {
+                    if (data) setIssue(data);
+                }).catch(() => {});
+            }
+        };
+
+        window.addEventListener('civiclens:intent-executed', handleIntentExecuted);
+        return () => window.removeEventListener('civiclens:intent-executed', handleIntentExecuted);
+    }, [issueId]);
+
     const handleDeleteIssue = async () => {
         setIsDeleting(true);
         try {
@@ -171,7 +197,14 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
 
     const handleInlineVote = async (targetStageKey: string, voteType: 'yes' | 'no') => {
         if (!user || user.isAnonymous) {
-            router.push('/login');
+            setPendingIntent({
+                type: 'VOTE_STATUS',
+                issueId,
+                stageKey: targetStageKey as IssueStatusState,
+                voteType
+            });
+            setAuthTrigger("to vote on issue verification");
+            setIsAuthOpen(true);
             return;
         }
 
@@ -721,6 +754,12 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                     </div>
                 </div>
             )}
+
+            <AuthModule
+                isOpen={isAuthOpen}
+                onClose={() => setIsAuthOpen(false)}
+                triggerAction={authTrigger}
+            />
         </div>
     );
 }

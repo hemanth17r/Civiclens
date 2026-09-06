@@ -10,6 +10,7 @@ import {
     formatTimeRemaining, type Mission, type MissionProgress
 } from '@/lib/missions';
 import { awardXp } from '@/lib/gamification';
+import AuthModule from '@/components/AuthModule';
 
 export default function MissionsPage() {
     const { user, userProfile } = useAuth();
@@ -17,6 +18,7 @@ export default function MissionsPage() {
     const [progress, setProgress] = useState<Record<string, MissionProgress>>({});
     const [loading, setLoading] = useState(true);
     const [seeding, setSeeding] = useState(false);
+    const [showAuthModal, setShowAuthModal] = useState(false);
 
     useEffect(() => {
         if (!user || !userProfile?.city) return;
@@ -81,7 +83,18 @@ export default function MissionsPage() {
             <div className="flex flex-col items-center justify-center min-h-screen text-center p-6 bg-white">
                 <Target size={40} className="text-gray-300 mb-4" />
                 <h1 className="text-xl font-bold text-gray-900 mb-1">Sign in to see missions</h1>
-                <p className="text-gray-500 text-sm">Active missions will appear here.</p>
+                <p className="text-gray-500 text-sm mb-6">Active missions will appear here once you are signed in.</p>
+                <button
+                    onClick={() => setShowAuthModal(true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-full shadow-md transition-all text-sm cursor-pointer"
+                >
+                    Sign In
+                </button>
+                <AuthModule
+                    isOpen={showAuthModal}
+                    onClose={() => setShowAuthModal(false)}
+                    triggerAction="to participate in missions"
+                />
             </div>
         );
     }

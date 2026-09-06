@@ -2,11 +2,12 @@
 
 import dynamic from 'next/dynamic';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import BottomNav from './BottomNav';
 import { useAuth } from '@/context/AuthContext';
+import { setPendingIntent } from '@/lib/authIntents';
 const ReportIssueDialog = dynamic(() => import('./ReportIssueDialog'), { ssr: false });
 const AuthModule = dynamic(() => import('./AuthModule'), { ssr: false });
 const OnboardingModal = dynamic(() => import('./OnboardingModal'), { ssr: false });
@@ -23,8 +24,21 @@ export default function Shell({ children }: ShellProps) {
     const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
+    // Auto-open report dialog if user authenticated with REPORT_ISSUE intent
+    useEffect(() => {
+        const handleIntentExecuted = (e: Event) => {
+            const customEvent = e as CustomEvent;
+            if (customEvent.detail?.type === 'REPORT_ISSUE') {
+                setIsReportDialogOpen(true);
+            }
+        };
+        window.addEventListener('civiclens:intent-executed', handleIntentExecuted);
+        return () => window.removeEventListener('civiclens:intent-executed', handleIntentExecuted);
+    }, []);
+
     const handleReportClick = useCallback(() => {
         if (!user) {
+            setPendingIntent({ type: 'REPORT_ISSUE' });
             setIsAuthModalOpen(true);
         } else {
             setIsReportDialogOpen(true);

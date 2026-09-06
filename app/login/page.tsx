@@ -4,11 +4,23 @@ import React, { useState, useEffect } from 'react';
 import { Mail, ArrowRight, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function LoginPage() {
+function getSafeReturnUrl(rawUrl: string | null): string {
+    if (!rawUrl) return '/';
+    // Validate relative path and prevent open-redirect exploits
+    if (rawUrl.startsWith('/') && !rawUrl.startsWith('//')) {
+        return rawUrl;
+    }
+    return '/';
+}
+
+function LoginForm() {
     const { user, sendMagicLink, loginWithGoogle } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const returnUrl = getSafeReturnUrl(searchParams.get('returnUrl'));
+
     const [email, setEmail] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isSent, setIsSent] = useState(false);
@@ -16,9 +28,9 @@ export default function LoginPage() {
 
     useEffect(() => {
         if (user) {
-            router.push('/');
+            router.push(returnUrl);
         }
-    }, [user, router]);
+    }, [user, router, returnUrl]);
 
     const handleEmailSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -48,7 +60,7 @@ export default function LoginPage() {
             setIsLoading(true);
             setError('');
             await loginWithGoogle();
-            router.push('/');
+            router.push(returnUrl);
         } catch (e: any) {
             console.error(e);
             setError('Google sign-in was cancelled or failed.');
@@ -136,5 +148,17 @@ export default function LoginPage() {
                 </div>
             </motion.div>
         </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <React.Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-white">
+                <Loader2 className="animate-spin text-blue-600" size={32} />
+            </div>
+        }>
+            <LoginForm />
+        </React.Suspense>
     );
 }

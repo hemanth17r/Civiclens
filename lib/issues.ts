@@ -1,4 +1,3 @@
-import { DEMO_ISSUES } from "@/data/demoIssues";
 import { db } from "./firebase";
 import { 
     checkViralThreshold, 
@@ -176,14 +175,25 @@ export const getFeedIssues = async (
         const targetCities = [userCity.name, ...cachedNeighborNames];
 
         // 2. Query the local cluster (Firestore 'in' supports up to 10 values — we use 6)
-        const localQuery = query(
-            collection(db, 'issues'),
-            where('cityName', 'in', targetCities),
-            limit(50)
-        );
-
-        const localSnapshot = await withRetry(() => getDocs(localQuery));
-        let issues = localSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+        let issues: Issue[] = [];
+        try {
+            const orderedQuery = query(
+                collection(db, 'issues'),
+                where('cityName', 'in', targetCities),
+                orderBy('createdAt', 'desc'),
+                limit(50)
+            );
+            const snapshot = await withRetry(() => getDocs(orderedQuery));
+            issues = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+        } catch {
+            const localQuery = query(
+                collection(db, 'issues'),
+                where('cityName', 'in', targetCities),
+                limit(50)
+            );
+            const localSnapshot = await withRetry(() => getDocs(localQuery));
+            issues = localSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+        }
 
         // Filter out unapproved issues unless the user is the author, and exclude legacy DB demo docs
         issues = issues.filter(i => 
@@ -191,24 +201,24 @@ export const getFeedIssues = async (
             ((i.status && i.status !== 'Reported') || (currentUserId && i.userId === currentUserId))
         );
 
-        // 3. Sort: user's exact city first, then by hype
+        // 3. Sort: user's exact city first, then by hype, then newest
         issues.sort((a, b) => {
             const aLocal = a.cityName === userCity.name ? 1 : 0;
             const bLocal = b.cityName === userCity.name ? 1 : 0;
             if (aLocal !== bLocal) return bLocal - aLocal;
-            return (b.votes || 0) - (a.votes || 0);
+            const voteDiff = (b.votes || 0) - (a.votes || 0);
+            if (voteDiff !== 0) return voteDiff;
+            const tA = a.createdAt?.toMillis?.() || (a.createdAt?.toDate?.() ? a.createdAt.toDate().getTime() : 0);
+            const tB = b.createdAt?.toMillis?.() || (b.createdAt?.toDate?.() ? b.createdAt.toDate().getTime() : 0);
+            return tB - tA;
         });
 
-        // 4. Return real issues if present; otherwise gracefully fallback to static demo issues
-        if (issues.length > 0) {
-            return issues.slice(0, 20);
-        }
-
-        return DEMO_ISSUES;
+        // 4. Return real issues
+        return issues.slice(0, 20);
 
     } catch (error: any) {
         console.warn('Error fetching feed:', error.message);
-        return DEMO_ISSUES;
+        return [];
     }
 };
 
@@ -218,30 +228,48 @@ export const getTrendingIssues = async (category?: string, currentUserId?: strin
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-        // Fetch recent issues (broader set for scoring)
-        const q = query(
-            collection(db, 'issues'),
-            where('createdAt', '>', sevenDaysAgo),
-            orderBy('createdAt', 'desc'),
-            limit(50)
-        );
+        let issues: Issue[] = [];
+        const isCatSpecific = category && category !== 'All';
 
-        const querySnapshot = await withRetry(() => getDocs(q));
-        let issues = querySnapshot.docs.map(d => ({
-            id: d.id,
-            ...d.data()
-        } as Issue));
+        if (isCatSpecific) {
+            try {
+                const qCat = query(
+                    collection(db, 'issues'),
+                    where('category', '==', category),
+                    where('createdAt', '>', sevenDaysAgo),
+                    orderBy('createdAt', 'desc'),
+                    limit(50)
+                );
+                const snap = await withRetry(() => getDocs(qCat));
+                issues = snap.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+            } catch {
+                // Fallback to broader query if composite index is pending
+                const q = query(
+                    collection(db, 'issues'),
+                    where('createdAt', '>', sevenDaysAgo),
+                    orderBy('createdAt', 'desc'),
+                    limit(50)
+                );
+                const snap = await withRetry(() => getDocs(q));
+                issues = snap.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+                issues = issues.filter(i => i.category === category);
+            }
+        } else {
+            const q = query(
+                collection(db, 'issues'),
+                where('createdAt', '>', sevenDaysAgo),
+                orderBy('createdAt', 'desc'),
+                limit(50)
+            );
+            const snap = await withRetry(() => getDocs(q));
+            issues = snap.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+        }
 
         // Filter out unapproved issues unless the user is the author, and exclude legacy DB demo docs
         issues = issues.filter(i => 
             !i.title?.toLowerCase().includes('[demo]') &&
             ((i.status && i.status !== 'Reported') || (currentUserId && i.userId === currentUserId))
         );
-
-        // Filter by category if provided
-        if (category && category !== 'All') {
-            issues = issues.filter(i => i.category === category);
-        }
 
         // Trending score: (hypes*2 + comments*1.5 + saves) / timeFactor
         // timeFactor = hours since creation + 2 (gravity)
@@ -257,21 +285,10 @@ export const getTrendingIssues = async (category?: string, currentUserId?: strin
 
         scored.sort((a, b) => b._trendScore - a._trendScore);
 
-        if (scored.length > 0) {
-            return scored.slice(0, 20);
-        }
-
-        // Fallback to demo issues if no trending items in recent window
-        if (!category || category === 'All') {
-            return DEMO_ISSUES;
-        }
-        return DEMO_ISSUES.filter(i => i.category === category);
+        return scored.slice(0, 20);
     } catch (error: any) {
         console.warn("Error fetching trending issues:", error.message);
-        if (!category || category === 'All') {
-            return DEMO_ISSUES;
-        }
-        return DEMO_ISSUES.filter(i => i.category === category);
+        return [];
     }
 };
 
@@ -283,13 +300,13 @@ export const getLeaderboardIssues = async (cityName: string | null) => {
                 collection(db, 'issues'),
                 where('status', 'in', ['Verification Needed', 'Active', 'Action Seen']),
                 where('cityName', '==', cityName),
-                limit(100) // we fetch 100 and sort in memory because firestore can't sort by sum of fields
+                limit(50)
             );
         } else {
             q = query(
                 collection(db, 'issues'),
-                where('status', 'in', ['Verification Needed', 'Verified', 'Active']),
-                limit(100)
+                where('status', 'in', ['Verification Needed', 'Active', 'Action Seen']),
+                limit(50)
             );
         }
 
@@ -1341,7 +1358,7 @@ export const getTopIssuesByCity = async (cityName: string, limitN: number = 5): 
         const q = query(
             collection(db, 'issues'),
             where('cityName', '==', cityName),
-            limit(100)
+            limit(Math.max(limitN * 3, 15))
         );
         const snapshot = await withRetry(() => getDocs(q));
         return snapshot.docs
@@ -1363,8 +1380,8 @@ export const getTopInProgressByCity = async (cityName: string, limitN: number = 
         const q = query(
             collection(db, 'issues'),
             where('cityName', '==', cityName),
-            where('status', '==', 'Active'),
-            limit(100)
+            where('status', 'in', ['Active', 'Action Seen']),
+            limit(Math.max(limitN * 3, 15))
         );
         const snapshot = await withRetry(() => getDocs(q));
         const issues = snapshot.docs
@@ -1391,7 +1408,7 @@ export const getTopResolvedByCity = async (cityName: string, limitN: number = 5)
             collection(db, 'issues'),
             where('cityName', '==', cityName),
             where('status', '==', 'Resolved'),
-            limit(100)
+            limit(Math.max(limitN * 3, 15))
         );
         const snapshot = await withRetry(() => getDocs(q));
         const issues = snapshot.docs
@@ -1417,10 +1434,10 @@ export const getTopPendingByCity = async (cityName: string, limitN: number = 5):
         const q = query(
             collection(db, 'issues'),
             where('cityName', '==', cityName),
-            where('status', '==', 'Under Review'),
-            limit(100)
+            where('status', 'in', ['Reported', 'Verification Needed', 'Under Review']),
+            limit(Math.max(limitN * 3, 15))
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await withRetry(() => getDocs(q));
         const issues = snapshot.docs
             .map(d => ({ id: d.id, ...d.data() } as Issue))
             .filter(i => !i.title?.toLowerCase().includes('[demo]'));

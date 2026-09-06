@@ -9,12 +9,14 @@ import { Loader2 } from 'lucide-react';
 import { ListSkeleton } from '@/components/Skeletons';
 
 import { useRouter } from 'next/navigation';
+import AuthModule from '@/components/AuthModule';
 
 export default function NotificationsPage() {
     const { user, loading: authLoading } = useAuth();
     const router = useRouter();
     const [notifications, setNotifications] = useState<NotificationData[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showAuth, setShowAuth] = useState(false);
 
     useEffect(() => {
         if (authLoading) return;
@@ -106,11 +108,16 @@ export default function NotificationsPage() {
                         Stay updated on your reports' statuses, community consensus, and gamification rewards.
                     </p>
                     <button
-                        onClick={() => router.push('/login')}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-full shadow-md transition-all text-sm"
+                        onClick={() => setShowAuth(true)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-full shadow-md transition-all text-sm cursor-pointer"
                     >
                         Sign In
                     </button>
+                    <AuthModule
+                        isOpen={showAuth}
+                        onClose={() => setShowAuth(false)}
+                        triggerAction="to see your notifications"
+                    />
                 </div>
             ) : notifications.length === 0 ? (
                 <div className="p-16 text-center">

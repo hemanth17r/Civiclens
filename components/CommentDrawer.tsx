@@ -13,6 +13,7 @@ import {
     CommentData, ReplyData
 } from '@/lib/issues';
 import Link from 'next/link';
+import AuthModule from './AuthModule';
 
 interface CommentDrawerProps {
     isOpen: boolean;
@@ -29,6 +30,9 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
     const [commentText, setCommentText] = useState("");
     const [replyingTo, setReplyingTo] = useState<{ id: string, user: string } | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    const [isAuthOpen, setIsAuthOpen] = useState(false);
+    const [authTrigger, setAuthTrigger] = useState("to comment on this issue");
 
     const [comments, setComments] = useState<CommentWithReplies[]>([]);
     const [loadingComments, setLoadingComments] = useState(true);
@@ -151,7 +155,11 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
     };
 
     const toggleLikeComment = async (commentId: string) => {
-        if (!user) return;
+        if (!user) {
+            setAuthTrigger("to like comments");
+            setIsAuthOpen(true);
+            return;
+        }
         const comment = comments.find(c => c.id === commentId);
         if (!comment) return;
 
@@ -172,6 +180,22 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
             await unlikeComment(issueId, commentId, user.uid);
         } else {
             await likeComment(issueId, commentId, user.uid);
+        }
+    };
+
+    const handleReplyClick = (commentId: string, userHandle: string) => {
+        if (!user) {
+            setAuthTrigger("to reply to comments");
+            setIsAuthOpen(true);
+            return;
+        }
+        setReplyingTo({ id: commentId, user: userHandle });
+    };
+
+    const handleInputClick = () => {
+        if (!user) {
+            setAuthTrigger("to comment on this issue");
+            setIsAuthOpen(true);
         }
     };
 
@@ -262,14 +286,14 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                                             {/* Action Bar */}
                                             <div className="flex items-center gap-4 mt-2 mb-1">
                                                 <button
-                                                    onClick={() => setReplyingTo({ id: c.id, user: c.userHandle })}
-                                                    className="text-xs font-bold text-gray-500 hover:text-gray-900"
+                                                    onClick={() => handleReplyClick(c.id, c.userHandle)}
+                                                    className="text-xs font-bold text-gray-500 hover:text-gray-900 cursor-pointer"
                                                 >
                                                     Reply
                                                 </button>
                                                 <button
                                                     onClick={() => toggleLikeComment(c.id)}
-                                                    className="text-xs font-bold flex items-center gap-1 text-gray-500 hover:text-gray-900"
+                                                    className="text-xs font-bold flex items-center gap-1 text-gray-500 hover:text-gray-900 cursor-pointer"
                                                 >
                                                     <Heart size={12} className={clsx(c.isLiked && "fill-red-500 text-red-500")} />
                                                     {c.likes > 0 && c.likes}
@@ -280,7 +304,7 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                                             {((c.replyCount && c.replyCount > 0) || (loadedReplies[c.id] && loadedReplies[c.id].length > 0)) && (
                                                 <button
                                                     onClick={() => toggleReplies(c.id)}
-                                                    className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-2 mb-1"
+                                                    className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-2 mb-1 cursor-pointer"
                                                 >
                                                     {loadingReplies[c.id] ? (
                                                         <Loader2 size={12} className="animate-spin text-gray-400" />
@@ -315,8 +339,8 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                                                                 </p>
                                                                 <div className="flex items-center gap-4 mt-1.5">
                                                                     <button
-                                                                        onClick={() => setReplyingTo({ id: c.id, user: r.userHandle })}
-                                                                        className="text-[11px] font-bold text-gray-500 hover:text-gray-900"
+                                                                        onClick={() => handleReplyClick(c.id, r.userHandle)}
+                                                                        className="text-[11px] font-bold text-gray-500 hover:text-gray-900 cursor-pointer"
                                                                     >
                                                                         Reply
                                                                     </button>
@@ -349,17 +373,17 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                                         <User size={20} className="m-2.5 text-gray-400" />
                                     }
                                 </div>
-                                <div className="flex-1 relative">
+                                <div className="flex-1 relative" onClick={handleInputClick}>
                                     <input
                                         ref={inputRef}
                                         type="text"
                                         value={commentText}
                                         onChange={(e) => setCommentText(e.target.value)}
-                                        placeholder={replyingTo ? `Reply to ${replyingTo.user}...` : "Add a comment..."}
-                                        className="w-full border border-gray-200 rounded-full pl-5 pr-12 py-3 text-sm focus:outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400 transition-all font-medium"
-                                        disabled={!user}
+                                        placeholder={replyingTo ? `Reply to ${replyingTo.user}...` : (user ? "Add a comment..." : "Sign in to comment...")}
+                                        className="w-full border border-gray-200 rounded-full pl-5 pr-12 py-3 text-sm focus:outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400 transition-all font-medium cursor-pointer"
+                                        readOnly={!user}
                                     />
-                                    {commentText.trim() && (
+                                    {commentText.trim() && user && (
                                         <button
                                             type="submit"
                                             disabled={sending}
@@ -372,6 +396,12 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                             </form>
                         </div>
                     </motion.div>
+
+                    <AuthModule
+                        isOpen={isAuthOpen}
+                        onClose={() => setIsAuthOpen(false)}
+                        triggerAction={authTrigger}
+                    />
                 </>
             )}
         </AnimatePresence>

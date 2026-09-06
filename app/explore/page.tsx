@@ -195,22 +195,20 @@ export default function ExplorePage() {
     return (
         <div className="min-h-screen bg-white pb-20 md:pb-0">
             {/* Sticky Header */}
-            {user && (
-                <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md pt-4 pb-2 px-4 shadow-sm md:hidden">
-                    <form onSubmit={handleSearchSubmit} className="relative" ref={mobileSearchRef}>
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                            type="text"
-                            placeholder="Search @handles, issues, places..."
-                            value={searchQuery}
-                            onChange={(e) => handleSearchInput(e.target.value)}
-                            onFocus={() => { if (searchQuery.length >= 1) setShowSearchResults(true); }}
-                            className="w-full bg-gray-100 rounded-full py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
-                        />
-                        {renderDropdown()}
-                    </form>
-                </div>
-            )}
+            <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md pt-4 pb-2 px-4 shadow-sm md:hidden">
+                <form onSubmit={handleSearchSubmit} className="relative" ref={mobileSearchRef}>
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                        type="text"
+                        placeholder="Search @handles, issues, places..."
+                        value={searchQuery}
+                        onChange={(e) => handleSearchInput(e.target.value)}
+                        onFocus={() => { if (searchQuery.length >= 1) setShowSearchResults(true); }}
+                        className="w-full bg-gray-100 rounded-full py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    />
+                    {renderDropdown()}
+                </form>
+            </div>
 
             {/* Desktop Header */}
             <div className="hidden md:block p-6 bg-white">
@@ -227,20 +225,18 @@ export default function ExplorePage() {
                         </button>
                     )}
                 </div>
-                {user && (
-                    <form onSubmit={handleSearchSubmit} className="relative max-w-xl" ref={desktopSearchRef}>
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                        <input
-                            type="text"
-                            placeholder="Search @handles, issues, places..."
-                            value={searchQuery}
-                            onChange={(e) => handleSearchInput(e.target.value)}
-                            onFocus={() => { if (searchQuery.length >= 1) setShowSearchResults(true); }}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-full py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
-                        />
-                        {renderDropdown()}
-                    </form>
-                )}
+                <form onSubmit={handleSearchSubmit} className="relative max-w-xl" ref={desktopSearchRef}>
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                    <input
+                        type="text"
+                        placeholder="Search @handles, issues, places..."
+                        value={searchQuery}
+                        onChange={(e) => handleSearchInput(e.target.value)}
+                        onFocus={() => { if (searchQuery.length >= 1) setShowSearchResults(true); }}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-full py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+                    />
+                    {renderDropdown()}
+                </form>
             </div>
 
             {/* Main Content Area */}

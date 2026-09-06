@@ -11,6 +11,7 @@ import { ArrowLeft, UserCircle2, AlertTriangle, ShieldCheck, ChevronDown, Award,
 import { useAuth } from '@/context/AuthContext';
 import { reportUser } from '../../../lib/moderation';
 import { getFollowStatus, getFollowStats, followUser, unfollowUser } from '@/lib/followers';
+import { setPendingIntent } from '@/lib/authIntents';
 import ConnectionsModal from '@/components/ConnectionsModal';
 import { getUserGamificationStats } from '@/lib/gamification';
 import { getUserTrustStats, getVoteWeightTier } from '@/lib/trust';
@@ -18,6 +19,7 @@ import { getUserCityRank } from '@/lib/users';
 import { useToast } from '@/context/ToastContext';
 import { TrustBadge } from '@/components/GamificationUI';
 import VerifiedBadge from '@/components/VerifiedBadge';
+import AuthModule from '@/components/AuthModule';
 
 export default function PublicProfilePage() {
     const params = useParams();
@@ -30,6 +32,9 @@ export default function PublicProfilePage() {
     const [issues, setIssues] = useState<Issue[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    const [isAuthOpen, setIsAuthOpen] = useState(false);
+    const [authTrigger, setAuthTrigger] = useState("to interact with citizens");
 
     // Gamification & Trust state
     const [gamification, setGamification] = useState<any>(null);
@@ -136,9 +141,25 @@ export default function PublicProfilePage() {
         fetchFollowData();
     }, [profileId, currentUser]);
 
+    // Auto-reflect follow action if intent was executed upon login
+    useEffect(() => {
+        const handleIntentExecuted = (e: Event) => {
+            const customEvent = e as CustomEvent;
+            const intent = customEvent.detail;
+            if (intent?.type === 'FOLLOW' && intent.targetUserId === profileId) {
+                setIsFollowing(true);
+                setFollowersCount(prev => prev + 1);
+            }
+        };
+        window.addEventListener('civiclens:intent-executed', handleIntentExecuted);
+        return () => window.removeEventListener('civiclens:intent-executed', handleIntentExecuted);
+    }, [profileId]);
+
     const handleFollowToggle = async () => {
         if (!currentUser) {
-            showToast("You must be logged in to follow users.", "error");
+            setPendingIntent({ type: 'FOLLOW', targetUserId: profileId });
+            setAuthTrigger("to follow citizens");
+            setIsAuthOpen(true);
             return;
         }
         setActionLoading(true);
@@ -162,7 +183,8 @@ export default function PublicProfilePage() {
 
     const handleReport = async () => {
         if (!currentUser) {
-            showToast("You must be logged in to report a user.", "error");
+            setAuthTrigger("to report this account");
+            setIsAuthOpen(true);
             return;
         }
         setReporting(true);
@@ -264,9 +286,16 @@ export default function PublicProfilePage() {
             <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 flex flex-col md:flex-row gap-6 items-center md:items-start text-center md:text-left relative">
 
                 {/* Report Button (Top Right) */}
-                {!isSelf && currentUser && (
+                {!isSelf && (
                     <button
-                        onClick={() => setShowReportModal(true)}
+                        onClick={() => {
+                            if (!currentUser) {
+                                setAuthTrigger("to report a user");
+                                setIsAuthOpen(true);
+                            } else {
+                                setShowReportModal(true);
+                            }
+                        }}
                         className="absolute top-6 right-6 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
                         title="Report User"
                     >
@@ -510,6 +539,12 @@ export default function PublicProfilePage() {
                 onClose={() => setConnectionsModalType(null)}
                 type={connectionsModalType || 'followers'}
                 userId={profileId}
+            />
+
+            <AuthModule
+                isOpen={isAuthOpen}
+                onClose={() => setIsAuthOpen(false)}
+                triggerAction={authTrigger}
             />
         </div>
     );

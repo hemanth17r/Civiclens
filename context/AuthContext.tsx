@@ -16,6 +16,7 @@ import {
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, googleProvider, db } from '@/lib/firebase';
 import { registerForPushNotifications } from '@/lib/fcmRegistration';
+import { executePendingIntent } from '@/lib/authIntents';
 
 // Interface for our custom user profile in Firestore
 export interface UserProfile {
@@ -132,6 +133,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             if (!currentUser) {
                 setUserProfile(null);
                 setLoading(false);
+            } else {
+                executePendingIntent(currentUser).catch(console.error);
             }
         });
 
