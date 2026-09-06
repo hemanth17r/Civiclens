@@ -377,7 +377,10 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
 
                     <motion.button
                         {...tapScale.icon}
-                        onClick={() => setIsCommentOpen(true)}
+                        onClick={() => {
+                            setIsAuthModalOpen(false);
+                            setIsCommentOpen(true);
+                        }}
                         className="flex items-center gap-1.5 text-gray-900 hover:text-blue-600 transition-colors cursor-pointer"
                         aria-label="Comments"
                     >
@@ -417,8 +420,11 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                 </div>
 
                 <button
-                    onClick={() => setIsCommentOpen(true)}
-                    className="text-gray-400 text-sm mt-2 font-medium"
+                    onClick={() => {
+                        setIsAuthModalOpen(false);
+                        setIsCommentOpen(true);
+                    }}
+                    className="text-gray-400 text-sm mt-2 font-medium cursor-pointer"
                 >
                     View all comments
                 </button>

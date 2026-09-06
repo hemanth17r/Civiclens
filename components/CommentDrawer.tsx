@@ -83,6 +83,15 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
         }
     }, [replyingTo]);
 
+    // Ensure auth modal and temporary states are reset cleanly
+    useEffect(() => {
+        setIsAuthOpen(false);
+        if (!isOpen) {
+            setReplyingTo(null);
+            setCommentText("");
+        }
+    }, [isOpen]);
+
     const formatTime = (ts: any) => {
         if (!ts) return 'Just now';
         try {

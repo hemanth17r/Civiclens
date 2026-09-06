@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Mail, ArrowRight, Loader2 } from 'lucide-react';
+import { Mail, ArrowRight, Loader2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { backdropVariants, modalVariants, tapScale } from '@/lib/motion';
@@ -45,7 +45,7 @@ export default function AuthModule({ isOpen, onClose, triggerAction = "to join t
     return (
         <AnimatePresence>
             {isOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
                     <motion.div
                         variants={backdropVariants}
                         initial="initial"
@@ -62,6 +62,14 @@ export default function AuthModule({ isOpen, onClose, triggerAction = "to join t
                         exit="exit"
                         className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
                     >
+                        <button
+                            onClick={onClose}
+                            className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors cursor-pointer z-10"
+                            aria-label="Close"
+                        >
+                            <X size={18} />
+                        </button>
+
                         <div className="p-8 pb-6 flex flex-col items-center text-center w-full mx-auto relative">
                             <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 text-2xl border border-gray-100 shadow-sm mx-auto">
                                 👋
