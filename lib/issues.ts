@@ -195,11 +195,6 @@ export const getFeedIssues = async (
             issues = localSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
         }
 
-        // Filter out unapproved issues unless the user is the author, and exclude legacy DB demo docs
-        issues = issues.filter(i => 
-            !i.title?.toLowerCase().includes('[demo]') &&
-            ((i.status && i.status !== 'Reported') || (currentUserId && i.userId === currentUserId))
-        );
 
         // 3. Sort: user's exact city first, then by hype, then newest
         issues.sort((a, b) => {
@@ -265,11 +260,6 @@ export const getTrendingIssues = async (category?: string, currentUserId?: strin
             issues = snap.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
         }
 
-        // Filter out unapproved issues unless the user is the author, and exclude legacy DB demo docs
-        issues = issues.filter(i => 
-            !i.title?.toLowerCase().includes('[demo]') &&
-            ((i.status && i.status !== 'Reported') || (currentUserId && i.userId === currentUserId))
-        );
 
         // Trending score: (hypes*2 + comments*1.5 + saves) / timeFactor
         // timeFactor = hours since creation + 2 (gravity)
@@ -312,8 +302,7 @@ export const getLeaderboardIssues = async (cityName: string | null) => {
 
         const querySnapshot = await withRetry(() => getDocs(q));
         const issues = querySnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as Issue))
-            .filter(i => !i.title?.toLowerCase().includes('[demo]'));
+            .map(doc => ({ id: doc.id, ...doc.data() } as Issue));
 
         // Rank = (votes/hypes) + comments + shares + saves
         // Using "votes" as hypeCount here since the rest of the app uses it
@@ -1363,7 +1352,7 @@ export const getTopIssuesByCity = async (cityName: string, limitN: number = 5): 
         const snapshot = await withRetry(() => getDocs(q));
         return snapshot.docs
             .map(d => ({ id: d.id, ...d.data() } as Issue))
-            .filter(i => i.status !== 'Resolved' && !i.title?.toLowerCase().includes('[demo]'))
+            .filter(i => i.status !== 'Resolved')
             .sort((a, b) => (b.votes || 0) - (a.votes || 0))
             .slice(0, limitN);
     } catch (error) {
@@ -1385,8 +1374,7 @@ export const getTopInProgressByCity = async (cityName: string, limitN: number = 
         );
         const snapshot = await withRetry(() => getDocs(q));
         const issues = snapshot.docs
-            .map(d => ({ id: d.id, ...d.data() } as Issue))
-            .filter(i => !i.title?.toLowerCase().includes('[demo]'));
+            .map(d => ({ id: d.id, ...d.data() } as Issue));
         // Sort newest first
         return issues.sort((a, b) => {
             const tA = a.createdAt?.toMillis?.() || 0;
@@ -1412,8 +1400,7 @@ export const getTopResolvedByCity = async (cityName: string, limitN: number = 5)
         );
         const snapshot = await withRetry(() => getDocs(q));
         const issues = snapshot.docs
-            .map(d => ({ id: d.id, ...d.data() } as Issue))
-            .filter(i => !i.title?.toLowerCase().includes('[demo]'));
+            .map(d => ({ id: d.id, ...d.data() } as Issue));
         // Sort newest resolved first
         return issues.sort((a, b) => {
             const tA = a.resolvedAt?.toMillis?.() || (a.createdAt?.toMillis?.() || 0);
@@ -1439,8 +1426,7 @@ export const getTopPendingByCity = async (cityName: string, limitN: number = 5):
         );
         const snapshot = await withRetry(() => getDocs(q));
         const issues = snapshot.docs
-            .map(d => ({ id: d.id, ...d.data() } as Issue))
-            .filter(i => !i.title?.toLowerCase().includes('[demo]'));
+            .map(d => ({ id: d.id, ...d.data() } as Issue));
         // FIFO: Oldest first for pending approval
         return issues.sort((a, b) => {
             const tA = a.createdAt?.toMillis?.() || 0;
