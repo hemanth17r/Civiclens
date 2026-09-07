@@ -6,7 +6,7 @@ import {
     User, FileText, Heart, Menu, X, LogOut,
     Camera, Check, Loader2, ChevronRight, UserCircle, Info, MapPin, Bookmark, Flame, MessageCircle, MessageSquare, Shield, Zap, Award, Map
 } from 'lucide-react';
-import { collection, query, where, getDocs, orderBy, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, limit, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { db } from '@/lib/firebase';
 import { supabase, getAuthenticatedSupabase } from '@/lib/supabase';
@@ -125,7 +125,8 @@ export default function ProfilePage() {
                 const q = query(
                     collection(db, 'issues'),
                     where('userId', '==', user.uid),
-                    orderBy('createdAt', 'desc')
+                    orderBy('createdAt', 'desc'),
+                    limit(20)
                 );
                 const snapshot = await getDocs(q);
                 setMyReports(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue)));
@@ -486,7 +487,9 @@ export default function ProfilePage() {
                     </h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4">
                         <div className="flex flex-col">
-                            <span className="text-3xl font-black text-gray-900">{myReports.length}</span>
+                            <span className="text-3xl font-black text-gray-900">
+                                {Math.max(gamification.stats.totalReports || 0, myReports.length)}
+                            </span>
                             <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Issues Reported</span>
                         </div>
                         <div className="flex flex-col">
@@ -542,7 +545,7 @@ export default function ProfilePage() {
                             />
                         )}
                         <FileText size={16} />
-                        <span>Reports ({myReports.length})</span>
+                        <span>Reports ({Math.max(gamification?.stats?.totalReports || 0, myReports.length)})</span>
                     </motion.button>
                     <motion.button
                         {...tapScale.pill}

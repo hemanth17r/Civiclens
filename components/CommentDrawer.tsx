@@ -10,7 +10,7 @@ import { formatDistanceToNow } from 'date-fns';
 import {
     getComments, addComment, addReply, getReplies,
     likeComment, unlikeComment, hasUserLikedComment,
-    CommentData, ReplyData
+    CommentData, ReplyData, getIssueTimeMs
 } from '@/lib/issues';
 import Link from 'next/link';
 import AuthModule from './AuthModule';
@@ -19,13 +19,14 @@ interface CommentDrawerProps {
     isOpen: boolean;
     onClose: () => void;
     issueId: string;
+    onCommentAdded?: () => void;
 }
 
 interface CommentWithReplies extends CommentData {
     isLiked: boolean;
 }
 
-export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawerProps) {
+export default function CommentDrawer({ isOpen, onClose, issueId, onCommentAdded }: CommentDrawerProps) {
     const { user, userProfile, isOfficial, isAdmin } = useAuth();
     const [commentText, setCommentText] = useState("");
     const [replyingTo, setReplyingTo] = useState<{ id: string, user: string } | null>(null);
@@ -54,7 +55,8 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                 const rawComments = await getComments(issueId);
                 const withLikes: CommentWithReplies[] = await Promise.all(
                     rawComments.map(async (c) => {
-                        const isLiked = user ? await hasUserLikedComment(issueId, c.id, user.uid) : false;
+                        // Efficiency: Only check like status if the comment actually has likes
+                        const isLiked = (user && (c.likes || 0) > 0) ? await hasUserLikedComment(issueId, c.id, user.uid) : false;
                         return { ...c, isLiked };
                     })
                 );
@@ -95,8 +97,9 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
     const formatTime = (ts: any) => {
         if (!ts) return 'Just now';
         try {
-            const date = ts.toDate ? ts.toDate() : new Date(ts);
-            return formatDistanceToNow(date, { addSuffix: false });
+            const ms = getIssueTimeMs(ts);
+            if (!ms) return 'Just now';
+            return formatDistanceToNow(new Date(ms), { addSuffix: false });
         } catch {
             return 'Just now';
         }
@@ -139,6 +142,7 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                     }
                     return c;
                 }));
+                onCommentAdded?.();
             }
             setReplyingTo(null);
         } else {
@@ -157,6 +161,7 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                     isLiked: false
                 };
                 setComments(prev => [...prev, newComment]);
+                onCommentAdded?.();
             }
         }
         setCommentText("");
@@ -275,7 +280,7 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                                     <div key={c.id} className="flex gap-3">
                                         <Link href={`/profile/${c.userId}`} className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs flex-shrink-0 mt-1 overflow-hidden hover:opacity-80 transition-opacity">
                                             {c.userAvatar ? (
-                                                <img src={c.userAvatar} alt="" className="w-full h-full object-cover" />
+                                                <img src={c.userAvatar} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                                             ) : (
                                                 c.userHandle?.replace('@', '').substring(0, 1).toUpperCase() || 'U'
                                             )}
@@ -332,7 +337,7 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                                                         <div key={r.id} className="flex gap-3">
                                                             <Link href={`/profile/${r.userId}`} className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-[10px] flex-shrink-0 mt-0.5 overflow-hidden hover:opacity-80 transition-opacity">
                                                                 {r.userAvatar ? (
-                                                                    <img src={r.userAvatar} alt="" className="w-full h-full object-cover" />
+                                                                    <img src={r.userAvatar} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                                                                 ) : (
                                                                     r.userHandle?.replace('@', '').substring(0, 1).toUpperCase() || 'U'
                                                                 )}
@@ -378,7 +383,7 @@ export default function CommentDrawer({ isOpen, onClose, issueId }: CommentDrawe
                             <form onSubmit={handleSend} className="flex gap-3 items-center">
                                 <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden shadow-sm">
                                     {user?.photoURL ?
-                                        <img src={user.photoURL} alt="Me" className="w-full h-full object-cover" /> :
+                                        <img src={user.photoURL} alt="Me" loading="lazy" decoding="async" className="w-full h-full object-cover" /> :
                                         <User size={20} className="m-2.5 text-gray-400" />
                                     }
                                 </div>

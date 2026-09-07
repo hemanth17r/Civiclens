@@ -4,14 +4,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import {
-    getTopInProgressByCity, getTopResolvedByCity, Issue
+    getTopInProgressByCity, getTopResolvedByCity, Issue, getCityPulseStats, getIssueTimeMs
 } from '@/lib/issues';
 import { getTopContributorsByCity } from '@/lib/users';
 import { UserProfile } from '@/context/AuthContext';
+import { INDIAN_CITIES } from '@/data/cities';
 import { 
     Loader2, AlertTriangle, Clock, Flame, MapPin, 
     CheckCircle, ShieldCheck, Info, X, Map, Trophy, 
-    User as UserIcon, ExternalLink 
+    User as UserIcon, ExternalLink, ChevronDown, TrendingUp
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
@@ -22,45 +23,73 @@ export default function CityInsightsPage() {
     const { userProfile } = useAuth();
     const router = useRouter();
 
+    // City state
+    const [selectedCity, setSelectedCity] = useState<string>('Delhi');
+    const [hasUserChangedCity, setHasUserChangedCity] = useState<boolean>(false);
+
+    // Synchronize default city with user profile once profile loads
+    useEffect(() => {
+        if (userProfile?.city && !hasUserChangedCity) {
+            setSelectedCity(userProfile.city);
+        }
+    }, [userProfile?.city, hasUserChangedCity]);
+
     // Data states
     const [inProgressIssues, setInProgressIssues] = useState<Issue[]>([]);
     const [resolvedIssues, setResolvedIssues] = useState<Issue[]>([]);
     const [topContributors, setTopContributors] = useState<UserProfile[]>([]);
+    const [pulseStats, setPulseStats] = useState<{
+        activeCount: number;
+        resolvedCount: number;
+        totalCount: number;
+        resolutionRate: number;
+    } | null>(null);
 
     const [loading, setLoading] = useState(true);
 
-    const userCity = userProfile?.city || 'Delhi';
+    const cityOptions = useMemo(() => {
+        const names = INDIAN_CITIES.map(c => c.name);
+        if (selectedCity && !names.includes(selectedCity)) {
+            return [selectedCity, ...names];
+        }
+        return names;
+    }, [selectedCity]);
 
     useEffect(() => {
         setLoading(true);
         Promise.all([
-            getTopInProgressByCity(userCity, 5),
-            getTopResolvedByCity(userCity, 5),
-            getTopContributorsByCity(userCity, 5)
-        ]).then(([ip, res, contributors]) => {
+            getTopInProgressByCity(selectedCity, 5),
+            getTopResolvedByCity(selectedCity, 5),
+            getTopContributorsByCity(selectedCity, 5),
+            getCityPulseStats(selectedCity)
+        ]).then(([ip, res, contributors, stats]) => {
             setInProgressIssues(ip);
             setResolvedIssues(res);
             setTopContributors(contributors);
+            setPulseStats(stats);
         }).catch(console.error)
             .finally(() => setLoading(false));
-    }, [userCity]);
+    }, [selectedCity]);
 
-    // Pre-compute time strings outside the render loop — formatDistanceToNow is
-    // a date-fns parse+format operation that should not run per-render inside .map()
+    // Pre-compute time strings safely outside the render loop
     const enrichedInProgress = useMemo(() =>
-        inProgressIssues.map(issue => ({
-            ...issue,
-            _age: formatDistanceToNow(new Date(issue.createdAt?.toMillis?.() || Date.now()), { addSuffix: true }),
-        })),
+        inProgressIssues.map(issue => {
+            const timeMs = getIssueTimeMs(issue.createdAt);
+            return {
+                ...issue,
+                _age: timeMs ? formatDistanceToNow(new Date(timeMs), { addSuffix: true }) : 'Recently',
+            };
+        }),
         [inProgressIssues]
     );
 
     const enrichedResolved = useMemo(() =>
         resolvedIssues.map(issue => {
-            const resolvedMs = issue.resolvedAt?.toMillis?.();
+            const timeMs = getIssueTimeMs(issue.createdAt);
+            const resolvedMs = getIssueTimeMs(issue.resolvedAt);
             return {
                 ...issue,
-                _age: formatDistanceToNow(new Date(issue.createdAt?.toMillis?.() || Date.now()), { addSuffix: true }),
+                _age: timeMs ? formatDistanceToNow(new Date(timeMs), { addSuffix: true }) : 'Recently',
                 _resolvedAge: resolvedMs ? formatDistanceToNow(new Date(resolvedMs), { addSuffix: true }) : null,
             };
         }),
@@ -94,7 +123,7 @@ export default function CityInsightsPage() {
         }
 
         if (topContributors.length === 0) {
-            return <div className="p-8 text-center text-gray-400 text-sm italic py-10">No contributors yet in this city.</div>;
+            return <div className="p-8 text-center text-gray-400 text-sm italic py-10">No contributors yet in {selectedCity}.</div>;
         }
 
         return (
@@ -115,7 +144,7 @@ export default function CityInsightsPage() {
                                 </div>
                                 <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-100 overflow-hidden shadow-sm flex-shrink-0">
                                     {contributor.photoURL ? (
-                                        <img src={contributor.photoURL} alt="" className="w-full h-full object-cover" />
+                                        <img src={contributor.photoURL} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center text-gray-400">
                                             <UserIcon size={20} />
@@ -187,9 +216,9 @@ export default function CityInsightsPage() {
                         >
                             <div className={`w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 shadow-sm border ${type === 'resolved' ? 'border-green-100 grayscale-[0.2]' : 'border-gray-100'} bg-gray-100`}>
                                 {(type === 'resolved' && issue.afterImageUrl) ? (
-                                    <img src={issue.afterImageUrl} alt="" className="w-full h-full object-cover" />
+                                    <img src={issue.afterImageUrl} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                                 ) : issue.imageUrl ? (
-                                    <img src={issue.imageUrl} alt="" className="w-full h-full object-cover" />
+                                    <img src={issue.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center">
                                         {type === 'resolved' ? <CheckCircle size={20} className="text-green-300" /> : <AlertTriangle size={20} className="text-gray-300" />}
@@ -226,16 +255,77 @@ export default function CityInsightsPage() {
     return (
         <div className="min-h-screen bg-white pb-24 md:pb-8">
             {/* Clean Light Hero Header */}
-            <div className="bg-gradient-to-b from-blue-50/60 to-white px-6 pt-8 pb-6 border-b border-gray-100/80">
+            <div className="bg-gradient-to-b from-blue-50/60 via-slate-50/30 to-white px-4 sm:px-6 pt-8 pb-6 border-b border-slate-100">
                 <div className="max-w-2xl mx-auto">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100/70 text-blue-700 rounded-full mb-3 shadow-xs">
-                        <Map size={14} className="text-blue-600" />
-                        <span className="text-[11px] font-bold uppercase tracking-wider">City Insights</span>
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100/70 text-blue-700 rounded-full shadow-xs">
+                            <Map size={14} className="text-blue-600 -translate-y-[0.5px]" />
+                            <span className="text-[11px] font-bold uppercase tracking-wider">City Insights</span>
+                        </div>
+
+                        {/* Interactive City Selector */}
+                        <div className="relative inline-flex items-center">
+                            <label htmlFor="city-select" className="sr-only">Choose City</label>
+                            <MapPin size={14} className="absolute left-3 text-slate-400 pointer-events-none -translate-y-[0.5px]" />
+                            <select
+                                id="city-select"
+                                value={selectedCity}
+                                onChange={(e) => {
+                                    setSelectedCity(e.target.value);
+                                    setHasUserChangedCity(true);
+                                }}
+                                className="appearance-none bg-white border border-slate-200 hover:border-slate-300 text-slate-900 text-xs font-bold rounded-xl pl-8 pr-7 py-1.5 shadow-xs transition-colors cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                            >
+                                {cityOptions.map((c) => (
+                                    <option key={c} value={c}>
+                                        {c}
+                                    </option>
+                                ))}
+                            </select>
+                            <ChevronDown size={12} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                        </div>
                     </div>
-                    <h1 className="text-3xl font-black tracking-tight text-gray-900">Civic Pulse in {userCity}</h1>
-                    <p className="text-gray-500 text-sm mt-1.5 font-medium leading-relaxed">
+
+                    <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+                        Civic Pulse in {selectedCity}
+                    </h1>
+                    <p className="text-slate-500 text-sm mt-1.5 font-medium leading-relaxed">
                         Tracking leadership, active improvements, and verified progress within your community.
                     </p>
+
+                    {/* Civic Pulse High-Level KPIs */}
+                    <div className="grid grid-cols-3 gap-3 mt-6">
+                        <div className="bg-white rounded-xl border border-slate-200/80 p-3 shadow-xs flex flex-col justify-between">
+                            <div className="flex items-center justify-between text-slate-500 mb-1">
+                                <span className="text-[11px] font-bold uppercase tracking-wider">Active</span>
+                                <Clock size={13} className="text-blue-500" />
+                            </div>
+                            <p className="text-xl sm:text-2xl font-black text-slate-900">
+                                {loading ? '—' : (pulseStats?.activeCount ?? 0)}
+                            </p>
+                            <span className="text-[10px] text-slate-400 font-medium mt-0.5">Under action</span>
+                        </div>
+                        <div className="bg-white rounded-xl border border-slate-200/80 p-3 shadow-xs flex flex-col justify-between">
+                            <div className="flex items-center justify-between text-slate-500 mb-1">
+                                <span className="text-[11px] font-bold uppercase tracking-wider">Resolved</span>
+                                <CheckCircle size={13} className="text-emerald-500" />
+                            </div>
+                            <p className="text-xl sm:text-2xl font-black text-slate-900">
+                                {loading ? '—' : (pulseStats?.resolvedCount ?? 0)}
+                            </p>
+                            <span className="text-[10px] text-slate-400 font-medium mt-0.5">Fixed & verified</span>
+                        </div>
+                        <div className="bg-white rounded-xl border border-slate-200/80 p-3 shadow-xs flex flex-col justify-between">
+                            <div className="flex items-center justify-between text-slate-500 mb-1">
+                                <span className="text-[11px] font-bold uppercase tracking-wider">Velocity</span>
+                                <TrendingUp size={13} className="text-purple-500" />
+                            </div>
+                            <p className="text-xl sm:text-2xl font-black text-slate-900">
+                                {loading ? '—' : `${pulseStats?.resolutionRate ?? 0}%`}
+                            </p>
+                            <span className="text-[10px] text-slate-400 font-medium mt-0.5">Resolution rate</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -262,7 +352,7 @@ export default function CityInsightsPage() {
                         </div>
                         <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">Top 5</span>
                     </div>
-                    {renderIssueList(enrichedInProgress, `No issues are currently marked as Active in ${userCity}.`, 'in_progress')}
+                    {renderIssueList(enrichedInProgress, `No issues are currently marked as Active in ${selectedCity}.`, 'in_progress')}
                 </div>
 
                 {/* ── TOP RESOLVED ─────────────────────── */}
@@ -274,7 +364,7 @@ export default function CityInsightsPage() {
                         </div>
                         <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">Top 5</span>
                     </div>
-                    {renderIssueList(enrichedResolved, `No recently resolved issues in ${userCity}.`, 'resolved')}
+                    {renderIssueList(enrichedResolved, `No recently resolved issues in ${selectedCity}.`, 'resolved')}
                 </div>
 
                 <div className="text-center pb-6 pt-2">

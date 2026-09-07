@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { MapPin, Flame, MessageCircle, Bookmark, User, Share2, BookmarkCheck, CheckCircle, Info } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { clsx } from 'clsx';
-import { Issue, hypeIssue, unhypeIssue, hasUserHyped, saveIssue, unsaveIssue, hasUserSaved } from '@/lib/issues';
+import { Issue, hypeIssue, unhypeIssue, hasUserHyped, saveIssue, unsaveIssue, hasUserSaved, getIssueTimeMs } from '@/lib/issues';
 import { setPendingIntent } from '@/lib/authIntents';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/context/AuthContext';
@@ -35,6 +35,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
     // Feature States
     const [hasHyped, setHasHyped] = useState(false);
     const [optimisticVotes, setOptimisticVotes] = useState(issue.votes || 0);
+    const [optimisticCommentCount, setOptimisticCommentCount] = useState(issue.commentCount || 0);
     const [showHeartAnim, setShowHeartAnim] = useState(false);
     const [isCommentOpen, setIsCommentOpen] = useState(false);
     const [isShareOpen, setIsShareOpen] = useState(false);
@@ -93,14 +94,10 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
     }, [user, issue.id]);
 
     // Helpers — memoized to avoid recomputation on every render.
-    // formatDistanceToNow is non-trivial; memoizing by timestamp avoids the call except on data changes.
-    const timeAgo = useMemo(
-        () => issue.createdAt
-            ? formatDistanceToNow(issue.createdAt.toDate(), { addSuffix: true })
-            : 'Just now',
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [issue.createdAt]
-    );
+    const timeAgo = useMemo(() => {
+        const ms = getIssueTimeMs(issue.createdAt);
+        return ms ? formatDistanceToNow(new Date(ms), { addSuffix: true }) : 'Just now';
+    }, [issue.createdAt]);
 
     const statusColor = useMemo(() => {
         switch (issue.status) {
@@ -385,8 +382,8 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                         aria-label="Comments"
                     >
                         <MessageCircle size={26} className="text-gray-900" />
-                        {(issue.commentCount ?? 0) > 0 && (
-                            <span className="text-xs font-semibold text-gray-700">{issue.commentCount}</span>
+                        {optimisticCommentCount > 0 && (
+                            <span className="text-xs font-semibold text-gray-700">{optimisticCommentCount}</span>
                         )}
                     </motion.button>
 
@@ -446,7 +443,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                             />
                         </div>
                         <span className="text-[10px] text-emerald-100 font-medium">
-                            {issue.resolvedAt ? formatDistanceToNow(issue.resolvedAt.toDate(), { addSuffix: true }) : 'Recently'}
+                            {issue.resolvedAt ? (getIssueTimeMs(issue.resolvedAt) ? formatDistanceToNow(new Date(getIssueTimeMs(issue.resolvedAt)), { addSuffix: true }) : 'Recently') : 'Recently'}
                         </span>
                     </div>
 
@@ -497,6 +494,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                 isOpen={isCommentOpen}
                 onClose={() => setIsCommentOpen(false)}
                 issueId={issue.id}
+                onCommentAdded={() => setOptimisticCommentCount(prev => prev + 1)}
             />
 
             <ShareModal

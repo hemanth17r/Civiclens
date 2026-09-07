@@ -384,7 +384,9 @@ export default function PublicProfilePage() {
                     </h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4">
                         <div className="flex flex-col">
-                            <span className="text-3xl font-black text-gray-900">{issues.length}</span>
+                            <span className="text-3xl font-black text-gray-900">
+                                {Math.max(gamification?.stats?.totalReports || 0, issues.length)}
+                            </span>
                             <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Issues Reported</span>
                         </div>
                         <div className="flex flex-col">
@@ -427,7 +429,7 @@ export default function PublicProfilePage() {
                 <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                     Reported Issues
                     <span className="bg-blue-100 text-blue-700 text-xs py-0.5 px-2.5 rounded-full font-bold">
-                        {issues.length}
+                        {Math.max(gamification?.stats?.totalReports || 0, issues.length)}
                     </span>
                 </h3>
 

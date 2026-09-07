@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, X, CheckCheck, Flame, MessageCircle, AlertTriangle, ShieldCheck, Clock } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getNotifications, getUnreadCount, markAsRead, markAllRead, NotificationData } from '@/lib/notifications';
+import { getIssueTimeMs } from '@/lib/issues';
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
 import { dropdownVariants, tapScale } from '@/lib/motion';
@@ -100,10 +101,10 @@ export default function NotificationBell() {
 
 
     const formatTime = (ts: any) => {
-        if (!ts) return 'Just now';
+        const ms = getIssueTimeMs(ts);
+        if (!ms) return 'Just now';
         try {
-            const date = ts.toDate ? ts.toDate() : new Date(ts);
-            return formatDistanceToNow(date, { addSuffix: true });
+            return formatDistanceToNow(new Date(ms), { addSuffix: true });
         } catch {
             return 'Just now';
         }

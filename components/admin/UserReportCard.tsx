@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase';
 import { UserProfile } from '@/context/AuthContext';
 import { ShieldCheck, UserX, AlertTriangle, ExternalLink, XCircle, Unlock } from 'lucide-react';
 import Link from 'next/link';
+import { getIssueTimeMs } from '@/lib/issues';
 
 interface UserReportCardProps {
     report: any; // The report object from firestore
@@ -15,15 +16,24 @@ interface UserReportCardProps {
     onDelete: (id: string) => void;
 }
 
+const userProfileCache = new Map<string, UserProfile>();
+
 const UserProfileChip = ({ uid, label, role }: { uid: string, label: string, role: 'target' | 'reporter' }) => {
-    const [user, setUser] = useState<UserProfile | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState<UserProfile | null>(() => (uid ? userProfileCache.get(uid) || null : null));
+    const [loading, setLoading] = useState(() => (uid ? !userProfileCache.has(uid) : false));
 
     useEffect(() => {
         if (!uid) return;
+        if (userProfileCache.has(uid)) {
+            setUser(userProfileCache.get(uid)!);
+            setLoading(false);
+            return;
+        }
         getDoc(doc(db, 'users', uid)).then(docSnap => {
             if (docSnap.exists()) {
-                setUser({ uid: docSnap.id, ...docSnap.data() } as UserProfile);
+                const profile = { uid: docSnap.id, ...docSnap.data() } as UserProfile;
+                userProfileCache.set(uid, profile);
+                setUser(profile);
             }
             setLoading(false);
         }).catch(() => setLoading(false));
@@ -35,7 +45,13 @@ const UserProfileChip = ({ uid, label, role }: { uid: string, label: string, rol
                 {loading ? (
                     <div className="w-full h-full bg-slate-200 animate-pulse" />
                 ) : user?.photoURL ? (
-                    <img src={user.photoURL} alt={user.displayName} className="w-full h-full object-cover" />
+                    <img 
+                        src={user.photoURL} 
+                        alt={user.displayName} 
+                        loading="lazy" 
+                        decoding="async" 
+                        className="w-full h-full object-cover" 
+                    />
                 ) : (
                     <UserX size={24} />
                 )}
@@ -91,7 +107,7 @@ export default function UserReportCard({ report, activeTab, onWarn, onBlock, onD
                     </span>
                 </div>
                 <span className="text-[10px] font-medium text-gray-400 flex items-center gap-1">
-                    {report.createdAt ? new Date(report.createdAt?.toMillis ? report.createdAt.toMillis() : report.createdAt).toLocaleString() : 'Just now'}
+                    {report.createdAt ? (getIssueTimeMs(report.createdAt) ? new Date(getIssueTimeMs(report.createdAt)).toLocaleString() : 'Recently') : 'Just now'}
                 </span>
             </div>
 

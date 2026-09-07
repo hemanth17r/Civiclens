@@ -3,13 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, orderBy, limit, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, orderBy, limit, serverTimestamp, Timestamp, getCountFromServer, arrayUnion } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { ShieldCheck, CheckCircle, XCircle, MessageSquare, Loader2, AlertTriangle, LayoutDashboard, Flag, Zap, ArrowLeft, Filter, MapPin, Unlock } from 'lucide-react';
-import { Issue } from '@/lib/issues';
+import { ShieldCheck, CheckCircle, XCircle, MessageSquare, Loader2, AlertTriangle, LayoutDashboard, Flag, Zap, ArrowLeft, Filter, MapPin, Unlock, UserPlus, RefreshCw } from 'lucide-react';
+import { Issue, getIssueTimeMs } from '@/lib/issues';
 import { notifyCitizenIssueApproved, notifyCitizenIssueRejected } from '@/lib/notifications';
 import { warnUser, blockUser, unblockUser } from '@/lib/moderation';
 import UserReportCard from '@/components/admin/UserReportCard';
+import Link from 'next/link';
 
 export default function AdminDashboardPage() {
     const { user, isAdmin, loading } = useAuth();
@@ -91,101 +92,144 @@ export default function AdminDashboardPage() {
         window.location.hash = `reports-${tabId}`;
     };
 
-    const fetchData = async () => {
+    const [counts, setCounts] = useState<{ issues: number; feedback: number; reports: number }>({ issues: 0, feedback: 0, reports: 0 });
+    const [loadedModules, setLoadedModules] = useState<{ issues?: boolean; feedback?: boolean; reports?: boolean }>({});
+
+    const formatIssueDate = (val: any) => {
+        const ms = getIssueTimeMs(val);
+        return ms > 0 ? new Date(ms).toLocaleDateString() : 'Recently';
+    };
+
+    const fetchHomeCounts = async () => {
+        try {
+            const [issuesSnap, feedbackSnap, reportsSnap] = await Promise.all([
+                getCountFromServer(query(collection(db, 'issues'), where('status', '==', 'Reported'))),
+                getCountFromServer(query(collection(db, 'feedbacks'), where('status', '==', 'pending'))),
+                getCountFromServer(query(collection(db, 'user_reports'), where('status', '==', 'pending')))
+            ]);
+            setCounts({
+                issues: issuesSnap.data().count,
+                feedback: feedbackSnap.data().count,
+                reports: reportsSnap.data().count
+            });
+        } catch (e) {
+            console.warn('Error fetching counts via getCountFromServer:', e);
+        }
+    };
+
+    const loadIssuesModule = async () => {
         setFetching(true);
         try {
-            // Fetch Pending Issues (First in, first out => oldest first)
-            const pendingQuery = query(
-                collection(db, 'issues'),
-                where('status', '==', 'Reported'),
-                // orderBy('createdAt', 'asc') -> Requires compound index, we will sort in memory for simplicity
-            );
-            const pendingSnap = await getDocs(pendingQuery);
-            const allPending = pendingSnap.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+            const [pendingSnap, approvedSnap] = await Promise.all([
+                getDocs(query(
+                    collection(db, 'issues'),
+                    where('status', '==', 'Reported'),
+                    limit(50)
+                )),
+                getDocs(query(
+                    collection(db, 'issues'),
+                    where('status', 'in', ['Verification Needed', 'Active', 'Action Seen', 'Resolved']),
+                    limit(50)
+                ))
+            ]);
 
-            // Sort pending: Oldest at the top (lowest array index)
-            allPending.sort((a, b) => {
-                const tA = a.createdAt?.toMillis?.() || 0;
-                const tB = b.createdAt?.toMillis?.() || 0;
-                return tA - tB;
-            });
+            const allPending = pendingSnap.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+            allPending.sort((a, b) => getIssueTimeMs(a) - getIssueTimeMs(b)); // FIFO: Oldest pending at the top
             setIssues(allPending);
 
-            // Fetch Approved Issues
-            const approvedQuery = query(
-                collection(db, 'issues'),
-                where('status', 'in', ['Verification Needed', 'Active', 'Action Seen', 'Resolved']),
-                limit(100)
-            );
-            const approvedSnap = await getDocs(approvedQuery);
             const allApproved = approvedSnap.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
-            allApproved.sort((a, b) => {
-                const tA = a.createdAt?.toMillis?.() || 0;
-                const tB = b.createdAt?.toMillis?.() || 0;
-                return tB - tA; // Newest first
-            });
+            allApproved.sort((a, b) => getIssueTimeMs(b) - getIssueTimeMs(a)); // Newest first
             setApprovedIssues(allApproved);
 
-            // Fetch Feedbacks
-            const feedbackQuery = query(collection(db, 'feedbacks'));
-            const feedbackSnap = await getDocs(feedbackQuery);
+            setLoadedModules(prev => ({ ...prev, issues: true }));
+        } catch (e) {
+            console.warn('Error fetching issues module data', e);
+        } finally {
+            setFetching(false);
+        }
+    };
+
+    const loadFeedbackModule = async () => {
+        setFetching(true);
+        try {
+            const feedbackSnap = await getDocs(query(collection(db, 'feedbacks'), limit(50)));
             const allFeedbacks = feedbackSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-            
-            allFeedbacks.sort((a: any, b: any) => {
-                const tA = a.createdAt?.toMillis?.() || (typeof a.createdAt === 'number' ? a.createdAt : 0);
-                const tB = b.createdAt?.toMillis?.() || (typeof b.createdAt === 'number' ? b.createdAt : 0);
-                return tB - tA; // Newest first
-            });
+            allFeedbacks.sort((a: any, b: any) => getIssueTimeMs(b) - getIssueTimeMs(a));
 
             setFeedbacks(allFeedbacks.filter((f: any) => f.status === 'pending' || !f.status));
             setResolvedFeedbacks(allFeedbacks.filter((f: any) => f.status === 'resolved'));
+            setLoadedModules(prev => ({ ...prev, feedback: true }));
+        } catch (e) {
+            console.warn('Error fetching feedback module data', e);
+        } finally {
+            setFetching(false);
+        }
+    };
 
-            // Fetch User Reports
-            const reportsQuery = query(collection(db, 'user_reports'));
-            const reportsSnap = await getDocs(reportsQuery);
+    const loadReportsModule = async () => {
+        setFetching(true);
+        try {
+            const reportsSnap = await getDocs(query(collection(db, 'user_reports'), limit(50)));
             const allReports = reportsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
             const pendingReports = allReports.filter((r: any) => r.status === 'pending' || !r.status);
-            pendingReports.sort((a: any, b: any) => {
-                const tA = a.createdAt?.toMillis?.() || (typeof a.createdAt === 'number' ? a.createdAt : 0);
-                const tB = b.createdAt?.toMillis?.() || (typeof b.createdAt === 'number' ? b.createdAt : 0);
-                return tA - tB; // oldest pending first
-            });
+            pendingReports.sort((a: any, b: any) => getIssueTimeMs(a) - getIssueTimeMs(b)); // oldest pending first
             setUserReports(pendingReports);
 
             const resolvedReps = allReports.filter((r: any) => r.status && r.status !== 'pending');
-            resolvedReps.sort((a: any, b: any) => {
-                const tA = a.createdAt?.toMillis?.() || (typeof a.createdAt === 'number' ? a.createdAt : 0);
-                const tB = b.createdAt?.toMillis?.() || (typeof b.createdAt === 'number' ? b.createdAt : 0);
-                return tB - tA; // Newest acted upon first
-            });
+            resolvedReps.sort((a: any, b: any) => getIssueTimeMs(b) - getIssueTimeMs(a));
             setResolvedUserReports(resolvedReps);
+
+            setLoadedModules(prev => ({ ...prev, reports: true }));
         } catch (e) {
-            console.warn('Error fetching admin data', e);
+            console.warn('Error fetching user reports module data', e);
         } finally {
             setFetching(false);
         }
     };
 
     useEffect(() => {
-        if (isAdmin) {
-            fetchData();
+        if (!isAdmin) return;
+
+        if (activeModule === 'home') {
+            fetchHomeCounts();
+        } else if (activeModule === 'issues' && !loadedModules.issues) {
+            loadIssuesModule();
+        } else if (activeModule === 'feedback' && !loadedModules.feedback) {
+            loadFeedbackModule();
+        } else if (activeModule === 'reports' && !loadedModules.reports) {
+            loadReportsModule();
         }
-    }, [isAdmin]);
+    }, [isAdmin, activeModule, loadedModules]);
 
     const handleApprove = async (id: string, title: string, targetUid?: string) => {
         try {
             await updateDoc(doc(db, 'issues', id), {
                 status: 'Verification Needed',
-                approvedAt: serverTimestamp()
+                approvedAt: serverTimestamp(),
+                statusChangedLog: arrayUnion({
+                    from: 'Reported',
+                    to: 'Verification Needed',
+                    at: new Date().toISOString()
+                })
             });
             const approvedIssue = issues.find(i => i.id === id);
-            setIssues(issues.filter(i => i.id !== id));
+            setIssues(prev => prev.filter(i => i.id !== id));
 
             if (approvedIssue) {
-                // Add to approved list at top
-                setApprovedIssues([{ ...approvedIssue, status: 'Verification Needed', approvedAt: Timestamp.now() }, ...approvedIssues]);
+                const updatedLog = [
+                    ...(approvedIssue.statusChangedLog || []),
+                    { from: 'Reported', to: 'Verification Needed', at: new Date().toISOString() }
+                ];
+                setApprovedIssues(prev => [{
+                    ...approvedIssue,
+                    status: 'Verification Needed',
+                    approvedAt: Timestamp.now(),
+                    statusChangedLog: updatedLog
+                }, ...prev]);
             }
+
+            setCounts(prev => ({ ...prev, issues: Math.max(0, prev.issues - 1) }));
 
             if (targetUid) {
                 await notifyCitizenIssueApproved(id, title, targetUid);
@@ -208,6 +252,7 @@ export default function AdminDashboardPage() {
             
             setFeedbacks(prev => prev.filter(f => f.id !== fb.id));
             setResolvedFeedbacks(prev => [{ ...fb, status: 'resolved', resolvedAt: new Date() }, ...prev]);
+            setCounts(prev => ({ ...prev, feedback: Math.max(0, prev.feedback - 1) }));
             
             showToast('Feedback marked as resolved');
             console.log("Feedback resolution successful");
@@ -230,6 +275,7 @@ export default function AdminDashboardPage() {
                     });
                     setUserReports(prev => prev.filter(r => r.id !== report.id));
                     setResolvedUserReports(prev => [{ ...report, status: 'dismissed' }, ...prev]);
+                    setCounts(prev => ({ ...prev, reports: Math.max(0, prev.reports - 1) }));
                     showToast('Report dismissed');
                 } catch(e: any) {
                     console.error('Error dismissing report:', e);
@@ -256,6 +302,7 @@ export default function AdminDashboardPage() {
                     });
                     setUserReports(prev => prev.filter(r => r.id !== report.id));
                     setResolvedUserReports(prev => [{ ...report, status: 'warned', resolvedAt: new Date() }, ...prev]);
+                    setCounts(prev => ({ ...prev, reports: Math.max(0, prev.reports - 1) }));
                     showToast('Warning sent to user');
                 } catch(e: any) {
                     console.error('Error sending warning:', e);
@@ -279,6 +326,7 @@ export default function AdminDashboardPage() {
                     });
                     setUserReports(prev => prev.filter(r => r.id !== report.id));
                     setResolvedUserReports(prev => [{ ...report, status: 'blocked', resolvedAt: new Date() }, ...prev]);
+                    setCounts(prev => ({ ...prev, reports: Math.max(0, prev.reports - 1) }));
                     showToast('User has been blocked', 'error');
                 } catch(e: any) {
                     console.error('Error blocking user:', e);
@@ -323,7 +371,8 @@ export default function AdminDashboardPage() {
 
         try {
             await deleteDoc(doc(db, 'issues', rejectingIssueId));
-            setIssues(issues.filter(i => i.id !== rejectingIssueId));
+            setIssues(prev => prev.filter(i => i.id !== rejectingIssueId));
+            setCounts(prev => ({ ...prev, issues: Math.max(0, prev.issues - 1) }));
 
             if (issueToReject.userId) {
                 await notifyCitizenIssueRejected(rejectingIssueId, issueToReject.title, issueToReject.userId, rejectionRemark);
@@ -376,21 +425,21 @@ export default function AdminDashboardPage() {
                 title: 'Issues Management',
                 icon: <AlertTriangle size={32} className="text-amber-500 mb-4" />,
                 desc: 'Approve or reject citizen reports.',
-                count: issues.length,
+                count: loadedModules.issues ? issues.length : counts.issues,
                 color: 'bg-amber-50 border-amber-200'
             },
             feedback: {
                 title: 'User Feedback',
                 icon: <MessageSquare size={32} className="text-blue-500 mb-4" />,
                 desc: 'Review comments and app suggestions.',
-                count: feedbacks.length,
+                count: loadedModules.feedback ? feedbacks.length : counts.feedback,
                 color: 'bg-blue-50 border-blue-200'
             },
             reports: {
                 title: 'User Reports',
                 icon: <Flag size={32} className="text-red-500 mb-4" />,
                 desc: 'Moderate flagged or toxic user accounts.',
-                count: userReports.length,
+                count: loadedModules.reports ? userReports.length : counts.reports,
                 color: 'bg-red-50 border-red-200'
             }
         };
@@ -441,16 +490,38 @@ export default function AdminDashboardPage() {
                         <div className="flex items-center gap-4">
                             <button
                                 onClick={goHome}
-                                className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors flex items-center justify-center"
+                                className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors flex items-center justify-center cursor-pointer"
+                                title="Back to workspace"
                             >
                                 <ArrowLeft size={20} />
                             </button>
                             <h1 className="text-xl font-bold capitalize">
                                 {activeModule === 'issues' ? 'Issues Management' : activeModule === 'feedback' ? 'User Feedback' : 'User Reports'}
                             </h1>
+                            <button
+                                onClick={() => {
+                                    if (activeModule === 'issues') loadIssuesModule();
+                                    else if (activeModule === 'feedback') loadFeedbackModule();
+                                    else if (activeModule === 'reports') loadReportsModule();
+                                }}
+                                disabled={fetching}
+                                className="p-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center justify-center cursor-pointer disabled:opacity-50"
+                                title="Refresh module data"
+                            >
+                                <RefreshCw size={14} className={fetching ? 'animate-spin' : ''} />
+                            </button>
                         </div>
                     )}
 
+                    <div className="flex items-center gap-3">
+                        <Link
+                            href="/admin/add-official"
+                            className="flex items-center gap-2 px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl border border-white/10 transition-colors shadow-sm"
+                        >
+                            <UserPlus size={15} />
+                            <span>Add Official</span>
+                        </Link>
+                    </div>
                 </div>
             </div>
 
@@ -484,13 +555,19 @@ export default function AdminDashboardPage() {
                                                 <div className="flex justify-between items-start mb-2">
                                                     <h3 className="font-bold text-gray-900 text-sm">{issue.title}</h3>
                                                     <span className="text-[10px] font-semibold text-gray-400">
-                                                        {new Date(issue.createdAt?.toMillis ? issue.createdAt.toMillis() : Date.now()).toLocaleDateString()}
+                                                        {formatIssueDate(issue)}
                                                     </span>
                                                 </div>
 
                                                 {issue.imageUrl && (
                                                     <div className="w-full h-32 mb-3 rounded-lg overflow-hidden bg-gray-100">
-                                                        <img src={issue.imageUrl} alt={issue.title} className="w-full h-full object-cover" />
+                                                        <img 
+                                                            src={issue.imageUrl} 
+                                                            alt={issue.title} 
+                                                            loading="lazy" 
+                                                            decoding="async" 
+                                                            className="w-full h-full object-cover" 
+                                                        />
                                                     </div>
                                                 )}
 
@@ -602,7 +679,7 @@ export default function AdminDashboardPage() {
                                                     <span className="font-semibold text-gray-900 text-sm">{fb.userEmail || 'Anonymous'}</span>
                                                     {fb.createdAt && (
                                                         <span className="text-[10px] font-semibold text-gray-400">
-                                                            {new Date(fb.createdAt?.toMillis ? fb.createdAt.toMillis() : fb.createdAt).toLocaleDateString()}
+                                                            {formatIssueDate(fb)}
                                                         </span>
                                                     )}
                                                 </div>
@@ -646,7 +723,7 @@ export default function AdminDashboardPage() {
                                                     <span className="font-semibold text-gray-700 text-xs">{fb.userEmail || 'Anonymous'}</span>
                                                     {fb.createdAt && (
                                                         <span className="text-[10px] text-gray-400">
-                                                            {new Date(fb.createdAt?.toMillis ? fb.createdAt.toMillis() : fb.createdAt).toLocaleDateString()}
+                                                            {formatIssueDate(fb)}
                                                         </span>
                                                     )}
                                                 </div>

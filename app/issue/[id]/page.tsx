@@ -2,18 +2,21 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MapPin, Calendar, Edit2, ShieldAlert, AlertCircle, Info, Users, CheckCircle2, Eye, Wrench, Clock, Trash2, Pencil } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Edit2, ShieldAlert, AlertCircle, Info, Users, CheckCircle2, Eye, Wrench, Clock, Trash2, Pencil, MessageCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
 import StageVoteCard from '@/components/StageVoteCard';
 import AuthModule from '@/components/AuthModule';
-import { getIssueById, getUserStatusVotes, Issue, IssueStatusState, normalizeStatus, voteOnStatus, STATUS_DB_KEYS } from '@/lib/issues';
+import { getIssueById, getUserStatusVotes, Issue, IssueStatusState, normalizeStatus, voteOnStatus, STATUS_DB_KEYS, getIssueTimeMs } from '@/lib/issues';
 import { setPendingIntent } from '@/lib/authIntents';
 import { deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { motion } from 'framer-motion';
 import { tapScale } from '@/lib/motion';
+import dynamic from 'next/dynamic';
+
+const CommentDrawer = dynamic(() => import('@/components/CommentDrawer'), { ssr: false });
 
 // ═══════════════════════════════════════════════════════════════════════
 // LIFECYCLE CONFIGURATION — 5-stage progression
@@ -113,6 +116,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     // Delete Modal State
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isCommentOpen, setIsCommentOpen] = useState(false);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -359,8 +363,9 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
 
     // ── Computed values ──────────────────────────────────────────────────────
     const currentStageIdx = getStageIndex(issue.status);
-    const timeAgo = issue.createdAt?.toDate
-        ? formatDistanceToNow(issue.createdAt.toDate(), { addSuffix: true })
+    const createdMs = getIssueTimeMs(issue.createdAt);
+    const timeAgo = createdMs
+        ? formatDistanceToNow(new Date(createdMs), { addSuffix: true })
         : 'Recently';
 
 
@@ -625,7 +630,8 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                     const logEntries: { date: string; label: string; color: string }[] = [];
 
                     // Always first: issue reported
-                    const reportedDate = issue.createdAt?.toDate ? issue.createdAt.toDate() : null;
+                    const reportedMs = getIssueTimeMs(issue.createdAt);
+                    const reportedDate = reportedMs ? new Date(reportedMs) : null;
                     logEntries.push({
                         date: reportedDate ? format(reportedDate, 'MMM d') : 'Earlier',
                         label: 'Issue reported',
@@ -633,9 +639,10 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                     });
 
                     // Append approved-at entry if approvedAt exists
-                    if (issue.approvedAt?.toDate) {
+                    const approvedMs = getIssueTimeMs(issue.approvedAt);
+                    if (approvedMs) {
                         logEntries.push({
-                            date: format(issue.approvedAt.toDate(), 'MMM d'),
+                            date: format(new Date(approvedMs), 'MMM d'),
                             label: 'Approved — verification opened',
                             color: LIFECYCLE_STAGES[1].color,
                         });
@@ -668,9 +675,10 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                     }
 
                     // Also append resolved-at if available and not already in log
-                    if (issue.resolvedAt?.toDate && issue.status === 'Resolved' && !issue.statusChangedLog?.some(e => e.to === 'Resolved')) {
+                    const resolvedMs = getIssueTimeMs(issue.resolvedAt);
+                    if (resolvedMs && issue.status === 'Resolved' && !issue.statusChangedLog?.some(e => e.to === 'Resolved')) {
                         logEntries.push({
-                            date: format(issue.resolvedAt.toDate(), 'MMM d'),
+                            date: format(new Date(resolvedMs), 'MMM d'),
                             label: 'Issue resolved ✓',
                             color: LIFECYCLE_STAGES[4].color,
                         });
@@ -698,11 +706,33 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
 
                 {/* Description */}
                 {issue.description && (
-                    <div className="mb-8">
+                    <div className="mb-6">
                         <h3 className="font-bold text-gray-900 mb-2">Description</h3>
                         <p className="text-gray-600 leading-relaxed">{issue.description}</p>
                     </div>
                 )}
+
+                {/* Community Discussion Banner / Trigger */}
+                <div className="bg-gradient-to-r from-blue-50/70 to-indigo-50/70 border border-blue-100 rounded-2xl p-4 mb-8 flex items-center justify-between shadow-xs">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
+                            <MessageCircle size={20} />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-900">Community Discussion</h3>
+                            <p className="text-xs text-gray-500">
+                                {issue.commentCount ? `${issue.commentCount} ${issue.commentCount === 1 ? 'comment' : 'comments'} posted` : 'Join the discussion or leave an update'}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => setIsCommentOpen(true)}
+                        className="px-4 py-2 bg-white hover:bg-blue-50 text-blue-600 font-bold text-xs rounded-xl border border-blue-200 transition-all shadow-xs hover:border-blue-300 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                    >
+                        <MessageCircle size={14} />
+                        <span>View Comments</span>
+                    </button>
+                </div>
 
                 {/* Official Resolution Banner */}
                 {issue.resolvedByHandle && (
@@ -790,6 +820,16 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                 isOpen={isAuthOpen}
                 onClose={() => setIsAuthOpen(false)}
                 triggerAction={authTrigger}
+            />
+
+            {/* Community Comment Drawer */}
+            <CommentDrawer
+                isOpen={isCommentOpen}
+                onClose={() => setIsCommentOpen(false)}
+                issueId={issue.id}
+                onCommentAdded={() => {
+                    setIssue(prev => prev ? { ...prev, commentCount: (prev.commentCount || 0) + 1 } : null);
+                }}
             />
         </div>
     );

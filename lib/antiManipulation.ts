@@ -38,6 +38,7 @@ export async function checkAccountAge(uid: string): Promise<{
     isNew: boolean;
     ageHours: number;
     dailyReportLimit: number;
+    isBlocked?: boolean;
 }> {
     try {
         const userRef = doc(db, 'users', uid);
@@ -45,6 +46,10 @@ export async function checkAccountAge(uid: string): Promise<{
         if (!snap.exists()) return { isNew: true, ageHours: 0, dailyReportLimit: NEW_ACCOUNT_DAILY_REPORT_LIMIT };
 
         const data = snap.data();
+        if (data?.isBlocked) {
+            return { isNew: false, ageHours: 999, dailyReportLimit: 0, isBlocked: true };
+        }
+
         const createdAt = data.createdAt;
 
         if (!createdAt || !createdAt.toMillis) {
@@ -59,6 +64,7 @@ export async function checkAccountAge(uid: string): Promise<{
             isNew,
             ageHours: Math.floor(ageHours),
             dailyReportLimit: isNew ? NEW_ACCOUNT_DAILY_REPORT_LIMIT : Infinity,
+            isBlocked: false,
         };
     } catch (error) {
         console.error('Failed to check account age:', error);
@@ -99,6 +105,14 @@ export async function canSubmitReport(uid: string): Promise<{
     remaining?: number;
 }> {
     const accountInfo = await checkAccountAge(uid);
+
+    if (accountInfo.isBlocked) {
+        return {
+            allowed: false,
+            reason: 'Your account has been restricted by administrators.',
+            remaining: 0,
+        };
+    }
 
     if (!accountInfo.isNew) {
         return { allowed: true };

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Bell, Flame, MessageCircle, CheckCircle, AlertTriangle, ShieldCheck, Clock, CheckCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getNotifications, markAsRead, markAllRead, NotificationData } from '@/lib/notifications';
+import { getIssueTimeMs } from '@/lib/issues';
 import { formatDistanceToNow } from 'date-fns';
 import { Loader2 } from 'lucide-react';
 import { ListSkeleton } from '@/components/Skeletons';
@@ -43,10 +44,10 @@ export default function NotificationsPage() {
     };
 
     const formatTime = (ts: any) => {
-        if (!ts) return 'Just now';
+        const ms = getIssueTimeMs(ts);
+        if (!ms) return 'Just now';
         try {
-            const date = ts.toDate ? ts.toDate() : new Date(ts);
-            return formatDistanceToNow(date, { addSuffix: true });
+            return formatDistanceToNow(new Date(ms), { addSuffix: true });
         } catch {
             return 'Just now';
         }
