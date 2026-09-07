@@ -10,13 +10,13 @@ import StageVoteCard from '@/components/StageVoteCard';
 import AuthModule from '@/components/AuthModule';
 import { getIssueById, getUserStatusVotes, Issue, IssueStatusState, normalizeStatus, voteOnStatus, STATUS_DB_KEYS } from '@/lib/issues';
 import { setPendingIntent } from '@/lib/authIntents';
-import { deleteDoc, doc } from 'firebase/firestore';
+import { deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { motion } from 'framer-motion';
 import { tapScale } from '@/lib/motion';
 
 // ═══════════════════════════════════════════════════════════════════════
-// LIFECYCLE CONFIGURATION — 6-stage progression
+// LIFECYCLE CONFIGURATION — 5-stage progression
 // ═══════════════════════════════════════════════════════════════════════
 
 interface LifecycleStage {
@@ -34,7 +34,7 @@ const LIFECYCLE_STAGES: LifecycleStage[] = [
     {
         key: 'Reported',
         label: 'Reported',
-        description: 'User submitted this issue',
+        description: 'Submitted — Pending review by CivicLens Admin',
         icon: <AlertCircle size={16} />,
         color: '#374151',
         bgColor: '#F3F4F6',
@@ -74,12 +74,12 @@ const LIFECYCLE_STAGES: LifecycleStage[] = [
     {
         key: 'Resolved',
         label: 'Resolved',
-        description: 'Community confirms the issue is fully fixed',
+        description: 'Officially inspected and resolved by authorities',
         icon: <CheckCircle2 size={16} />,
         color: '#059669',
         bgColor: '#ECFDF5',
         borderColor: '#10B981',
-        canVote: true,
+        canVote: false,
     },
 ];
 
@@ -129,27 +129,27 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     }, [showVerifiedInfo]);
 
     useEffect(() => {
-        let cancelled = false;
+        if (!issueId) return;
         setLoading(true);
         setError(false);
 
-        getIssueById(issueId)
-            .then((data) => {
-                if (cancelled) return;
-                if (!data) {
-                    setError(true);
-                } else {
-                    setIssue(data);
-                }
-            })
-            .catch(() => {
-                if (!cancelled) setError(true);
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
+        const issueRef = doc(db, 'issues', issueId);
+        const unsubscribe = onSnapshot(issueRef, (snap) => {
+            if (!snap.exists()) {
+                setError(true);
+                setIssue(null);
+            } else {
+                setIssue({ id: snap.id, ...snap.data() } as Issue);
+                setError(false);
+            }
+            setLoading(false);
+        }, (err) => {
+            console.warn('Error subscribing to issue updates:', err);
+            setError(true);
+            setLoading(false);
+        });
 
-        return () => { cancelled = true; };
+        return () => unsubscribe();
     }, [issueId]);
 
     // Load the user's existing votes for this issue once user+issue are known
@@ -313,7 +313,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                     <div className="h-4 w-1/2 bg-gray-100 animate-pulse rounded-lg" />
                     <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 space-y-5">
                         <div className="h-5 w-40 bg-gray-100 animate-pulse rounded" />
-                        {[1, 2, 3, 4, 5, 6].map(i => (
+                        {[1, 2, 3, 4, 5].map(i => (
                             <div key={i} className="flex items-center gap-4">
                                 <div className="w-4 h-4 bg-gray-200 rounded-full animate-pulse" />
                                 <div className="space-y-1.5">
@@ -456,20 +456,21 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                             const isNext = idx === currentStageIdx + 1;
                             const isLast = idx === LIFECYCLE_STAGES.length - 1;
 
-                            // Quick-vote icon: only on future stages (Active idx=2, Action Seen idx=3, Resolved idx=4)
-                            // Never on Reported (0) or Verification Needed (1)
-                            const showQuickVoteIcon = idx >= 2 && idx > currentStageIdx;
+                            // Quick-vote icon: only on Active (idx=2) and Action Seen (idx=3)
+                            // Never on Reported (0), Verification Needed (1), or Resolved (4)
+                            const showQuickVoteIcon = idx >= 2 && idx < 4 && idx > currentStageIdx;
                             const isQuickVoteExpanded = quickVoteOpen === stage.key;
 
                             // Quick-vote questions confirm the issue IS at that stage already
                             const getQuickVotePrompt = (key: string) => {
                                 switch (key) {
                                     case 'Active': return 'Is this issue verified and active?';
-                                    case 'Action Seen': return 'Has action already been taken?';
-                                    case 'Resolved': return 'Is this issue already resolved?';
+                                    case 'Action Seen': return 'Has official action already begun?';
                                     default: return 'Update status?';
                                 }
                             };
+
+                            const isUserAuthor = Boolean(user && issue && user.uid === issue.userId);
 
                             return (
                                 <div key={stage.key} className="relative">
@@ -553,6 +554,34 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                                             )}>
                                                 {stage.description}
                                             </p>
+
+                                            {/* Informational banner when issue is pending Admin review */}
+                                            {isCurrent && stage.key === 'Reported' && (
+                                                <div className="mt-3 p-3.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 text-xs flex items-start gap-2.5">
+                                                    <Clock size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                                                    <div>
+                                                        <span className="font-bold">Under Review by CivicLens Admin</span>
+                                                        <p className="text-amber-800 text-[11px] mt-0.5 leading-relaxed">
+                                                            This report has been submitted and is in the administrator queue. Once reviewed and approved by the admin, community verification will open.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Informational card when issue is officially Resolved */}
+                                            {isCurrent && stage.key === 'Resolved' && (
+                                                <div className="mt-3 p-3.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs space-y-1.5">
+                                                    <div className="flex items-center gap-1.5 font-bold text-emerald-800">
+                                                        <CheckCircle2 size={16} className="text-emerald-600" />
+                                                        <span>Officially Resolved {issue.resolvedByDepartment ? `by ${issue.resolvedByDepartment}` : 'by Authorities'}</span>
+                                                    </div>
+                                                    {issue.resolvedStatement && (
+                                                        <p className="text-emerald-700 text-xs italic">
+                                                            "{issue.resolvedStatement}"
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
                                             
                                             {/* Render Inline Vote Card for the CURRENT stage when it requires community voting */}
                                             {isCurrent && stage.canVote && (
@@ -564,10 +593,11 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                                                     isVoting={votingStageKey === stage.key}
                                                     onVote={(type) => handleInlineVote(stage.key, type)}
                                                     userVote={userVotes[stage.key] ?? null}
+                                                    isAuthor={isUserAuthor}
                                                 />
                                             )}
 
-                                            {/* Quick-vote card (expanded when pencil icon is clicked on a future stage) */}
+                                            {/* Quick-vote card (expanded when pencil icon is clicked on an eligible future stage) */}
                                             {isQuickVoteExpanded && !isCurrent && (
                                                 <StageVoteCard
                                                     stage={stage}
@@ -578,6 +608,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                                                     isVoting={votingStageKey === stage.key}
                                                     onVote={(type) => handleInlineVote(stage.key, type)}
                                                     userVote={userVotes[stage.key] ?? null}
+                                                    isAuthor={isUserAuthor}
                                                 />
                                             )}
                                         </div>

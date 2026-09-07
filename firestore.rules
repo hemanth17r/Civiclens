@@ -59,11 +59,11 @@ service cloud.firestore {
       allow read: if true; // Public read for landing feed
       allow create: if isAuthenticated() && isNotBlocked() && request.resource.data.userId == request.auth.uid;
       
-      // Non-owners can only update social counters/status flags. Owners and admins can update general fields (but not change ownership)
+      // Non-owners can only update social counters/flags. Status and lifecycle transitions are strictly server-managed (Admin SDK).
       allow update: if isAuthenticated() && request.resource.data.userId == resource.data.userId && (
         isAdmin() ||
         isOwner(resource.data.userId) ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'savesCount', 'commentCount', 'sharesCount', 'statusData', 'status', 'statusChangedLog', 'flagCount', 'isHidden'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'savesCount', 'commentCount', 'sharesCount', 'flagCount', 'isHidden'])
       );
       allow delete: if isAuthenticated() && (isOwner(resource.data.userId) || isAdmin());
 

@@ -15,6 +15,7 @@ export interface StageVoteCardProps {
     isVoting: boolean;
     onVote: (type: 'yes' | 'no') => void;
     userVote?: 'yes' | 'no' | null; // current user's vote (null / undefined = no vote)
+    isAuthor?: boolean;
 }
 
 export default function StageVoteCard({
@@ -26,6 +27,7 @@ export default function StageVoteCard({
     isVoting,
     onVote,
     userVote,
+    isAuthor = false,
 }: StageVoteCardProps) {
     const totalWeight = yesWeight + noWeight;
     const percentageYes =
@@ -37,10 +39,10 @@ export default function StageVoteCard({
     const getPrompt = () => {
         if (prompt) return prompt;
         switch (stage.key) {
-            case 'Verification Needed': return 'Is this a real issue?';
-            case 'Active':             return 'Has any action started on this?';
-            case 'Action Seen':        return 'Is work actively being done?';
-            case 'Resolved':           return 'Is this issue fully fixed?';
+            case 'Verification Needed': return 'Is this a genuine civic issue?';
+            case 'Active':             return 'Has any official work started on this?';
+            case 'Action Seen':        return 'Is work actively continuing on this?';
+            case 'Resolved':           return 'Officially confirmed and resolved';
             default:                   return 'Update status?';
         }
     };
@@ -77,68 +79,74 @@ export default function StageVoteCard({
                 />
             </div>
 
-            {/* Vote Buttons with slide-pill animation */}
-            <div className="relative flex rounded-xl overflow-hidden border border-gray-200 bg-gray-50 p-1">
-                {/* Sliding pill indicator — only visible when a vote is cast */}
-                {hasVote && (
-                    <motion.div
-                        layoutId={`votePill-${stage?.key || 'stage'}`}
+            {/* Vote Buttons or Author Notice */}
+            {isAuthor ? (
+                <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-center text-xs text-gray-500 font-medium">
+                    As the author of this report, you cannot vote on its community verification.
+                </div>
+            ) : (
+                <div className="relative flex rounded-xl overflow-hidden border border-gray-200 bg-gray-50 p-1">
+                    {/* Sliding pill indicator — only visible when a vote is cast */}
+                    {hasVote && (
+                        <motion.div
+                            layoutId={`votePill-${stage?.key || 'stage'}`}
+                            className={clsx(
+                                'absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg pointer-events-none z-0',
+                                userVote === 'yes'
+                                    ? 'left-1 bg-emerald-500 shadow-sm shadow-emerald-500/30'
+                                    : 'left-[calc(50%+2px)] bg-rose-500 shadow-sm shadow-rose-500/30'
+                            )}
+                            transition={springJelly}
+                        />
+                    )}
+
+                    {/* YES button */}
+                    <motion.button
+                        whileTap={{ scale: isVoting ? 1 : 0.96 }}
+                        onClick={() => !isVoting && onVote('yes')}
+                        disabled={isVoting}
                         className={clsx(
-                            'absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg pointer-events-none z-0',
+                            'relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors duration-200 cursor-pointer rounded-lg',
+                            isVoting && 'cursor-not-allowed opacity-60',
                             userVote === 'yes'
-                                ? 'left-1 bg-emerald-500 shadow-sm shadow-emerald-500/30'
-                                : 'left-[calc(50%+2px)] bg-rose-500 shadow-sm shadow-rose-500/30'
+                                ? 'text-white'
+                                : 'text-gray-500 hover:text-emerald-600'
                         )}
-                        transition={springJelly}
-                    />
-                )}
+                        aria-pressed={userVote === 'yes'}
+                        aria-label="Vote Yes"
+                    >
+                        {isVoting && userVote !== 'no' ? (
+                            <Loader2 size={15} className="animate-spin" />
+                        ) : (
+                            <ThumbsUp size={15} />
+                        )}
+                        Yes
+                    </motion.button>
 
-                {/* YES button */}
-                <motion.button
-                    whileTap={{ scale: isVoting ? 1 : 0.96 }}
-                    onClick={() => !isVoting && onVote('yes')}
-                    disabled={isVoting}
-                    className={clsx(
-                        'relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors duration-200 cursor-pointer rounded-lg',
-                        isVoting && 'cursor-not-allowed opacity-60',
-                        userVote === 'yes'
-                            ? 'text-white'
-                            : 'text-gray-500 hover:text-emerald-600'
-                    )}
-                    aria-pressed={userVote === 'yes'}
-                    aria-label="Vote Yes"
-                >
-                    {isVoting && userVote !== 'no' ? (
-                        <Loader2 size={15} className="animate-spin" />
-                    ) : (
-                        <ThumbsUp size={15} />
-                    )}
-                    Yes
-                </motion.button>
-
-                {/* NO button */}
-                <motion.button
-                    whileTap={{ scale: isVoting ? 1 : 0.96 }}
-                    onClick={() => !isVoting && onVote('no')}
-                    disabled={isVoting}
-                    className={clsx(
-                        'relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors duration-200 cursor-pointer rounded-lg',
-                        isVoting && 'cursor-not-allowed opacity-60',
-                        userVote === 'no'
-                            ? 'text-white'
-                            : 'text-gray-500 hover:text-rose-600'
-                    )}
-                    aria-pressed={userVote === 'no'}
-                    aria-label="Vote No"
-                >
-                    {isVoting && userVote !== 'yes' ? (
-                        <Loader2 size={15} className="animate-spin" />
-                    ) : (
-                        <ThumbsDown size={15} />
-                    )}
-                    No
-                </motion.button>
-            </div>
+                    {/* NO button */}
+                    <motion.button
+                        whileTap={{ scale: isVoting ? 1 : 0.96 }}
+                        onClick={() => !isVoting && onVote('no')}
+                        disabled={isVoting}
+                        className={clsx(
+                            'relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors duration-200 cursor-pointer rounded-lg',
+                            isVoting && 'cursor-not-allowed opacity-60',
+                            userVote === 'no'
+                                ? 'text-white'
+                                : 'text-gray-500 hover:text-rose-600'
+                        )}
+                        aria-pressed={userVote === 'no'}
+                        aria-label="Vote No"
+                    >
+                        {isVoting && userVote !== 'yes' ? (
+                            <Loader2 size={15} className="animate-spin" />
+                        ) : (
+                            <ThumbsDown size={15} />
+                        )}
+                        No
+                    </motion.button>
+                </div>
+            )}
 
             {/* Hint text */}
             {hasVote && (

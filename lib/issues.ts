@@ -760,207 +760,39 @@ export const voteOnStatus = async (
     targetStatus: IssueStatusState,
     voteType: 'yes' | 'no'
 ): Promise<VoteOnStatusResult> => {
-    if (!issueId || !userId || !targetStatus || targetStatus === 'Open') return { success: false, error: 'Invalid parameters' };
-
-    const issueRef = doc(db, 'issues', issueId);
-    // User vote document path — replace ALL spaces to avoid collisions between multi-word statuses
-    const voteRef = doc(db, 'issues', issueId, 'statusVotes', `${userId}_${targetStatus.replace(/ /g, '_').toLowerCase()}`);
+    if (!issueId || !userId || !targetStatus || targetStatus === 'Open' || targetStatus === 'Reported' || targetStatus === 'Resolved') {
+        return { success: false, error: 'Voting is not available for this stage.' };
+    }
 
     try {
-        // ── Pre-flight: detect deselect BEFORE rate-limiting ────────────────
-        // If the user already voted the same option, this is a deselect — skip the rate limit.
-        let isLikelyDeselect = false;
-        try {
-            const existingVoteSnap = await getDoc(voteRef);
-            if (existingVoteSnap.exists() && existingVoteSnap.data().vote === voteType) {
-                isLikelyDeselect = true;
-            }
-        } catch { /* ignore — transaction will catch this */ }
-
-        // Anti-manipulation: only rate-limit actual new/flipped votes
-        if (!isLikelyDeselect) {
-            const voteCheck = await canVoteOnStatus(userId);
-            if (!voteCheck.allowed) {
-                return { success: false, error: voteCheck.reason || 'Vote rate limit exceeded.' };
-            }
+        const { auth } = await import('./firebase');
+        const user = auth.currentUser;
+        if (!user) {
+            return { success: false, error: 'You must be logged in to vote.' };
         }
 
-        const result = await runTransaction(db, async (t) => {
-            const issueDoc = await t.get(issueRef);
-            if (!issueDoc.exists()) throw new Error("Issue not found");
-
-            const voteDoc = await t.get(voteRef);
-            let previousVoteType: 'yes' | 'no' | null = null;
-            let previousVoteWeight = 0;
-            let isDeselecting = false;
-
-            if (voteDoc.exists()) {
-                const prevData = voteDoc.data();
-                if (prevData.vote === voteType) {
-                    // Same button clicked again → deselect (remove the vote)
-                    isDeselecting = true;
-                }
-                previousVoteType = prevData.vote;
-                previousVoteWeight = prevData.weightApplied || 0;
-            }
-
-            const issueData = issueDoc.data();
-            const currentStatus = issueData.status;
-
-            // Get user's trust score and compute vote weight from tier system
-            const userRef = doc(db, 'users', userId);
-            const userDoc = await t.get(userRef);
-            const userTrustScore = userDoc.exists() ? (userDoc.data().trustScore ?? TRUST_DEFAULT) : TRUST_DEFAULT;
-            
-            // Confidence scaling incorporates total votes
-            const activeVotes = issueData.votes || 0;
-            const userWeight = getVoteWeight(userTrustScore, activeVotes);
-
-            const dbKey = STATUS_DB_KEYS[targetStatus];
-            if (!dbKey) throw new Error("Invalid status target");
-
-            // Initialize statusData if old issue
-            const statusData = issueData.statusData || {};
-            const targetData = { ...(statusData[dbKey] || { yesWeight: 0, noWeight: 0, score: 0 }) };
-
-            // ── Deselect path: user clicked the same option they already voted ──
-            if (isDeselecting) {
-                // Revert the weight of the existing vote
-                if (previousVoteType === 'yes') {
-                    targetData.yesWeight = Math.max(0, targetData.yesWeight - previousVoteWeight);
-                } else if (previousVoteType === 'no') {
-                    targetData.noWeight = Math.max(0, targetData.noWeight - previousVoteWeight);
-                }
-                targetData.score = targetData.yesWeight - targetData.noWeight;
-
-                // Remove the vote document
-                t.delete(voteRef);
-
-                // Update issue stats (status does NOT change on deselect)
-                t.update(issueRef, { [`statusData.${dbKey}`]: targetData });
-
-                return {
-                    success: true as const,
-                    deselected: true as const,
-                    consensusReached: false as const,
-                    newStatus: currentStatus as IssueStatusState,
-                    currentStats: targetData,
-                    _issueTitle: issueData.title,
-                    _authorUid: issueData.userId,
-                    _previousVoteType: previousVoteType,
-                };
-            }
-
-            // ── Normal / flip vote path ──────────────────────────────────────
-            // Revert previous vote weight if user is flipping from one option to the other
-            if (previousVoteType === 'yes') {
-                targetData.yesWeight = Math.max(0, targetData.yesWeight - previousVoteWeight);
-            } else if (previousVoteType === 'no') {
-                targetData.noWeight = Math.max(0, targetData.noWeight - previousVoteWeight);
-            }
-
-            // Apply new vote weight
-            if (voteType === 'yes') {
-                targetData.yesWeight += userWeight;
-            } else {
-                targetData.noWeight += userWeight;
-            }
-
-            // Calculate Continuous Consensus Score
-            const netScore = targetData.yesWeight - targetData.noWeight;
-            targetData.score = netScore;
-
-            // Check if Consensus is Reached (Stability Buffer)
-            let newStatus = currentStatus;
-            let consensusReached = false;
-
-            const currentIndex = STATUS_PROGRESSION.indexOf(currentStatus);
-            const targetIndex = STATUS_PROGRESSION.indexOf(targetStatus);
-
-            // ── Consensus Logic ──────────────────────────────────────────────
-            // Normal vote: cast on the CURRENT stage → advances to NEXT stage.
-            // Quick vote: cast on a FUTURE stage → jumps directly to that stage.
-            // Regression: score < -2 on current stage → reverts one step back.
-            if (netScore > 2.0) {
-                if (targetIndex === currentIndex && currentIndex < STATUS_PROGRESSION.length - 1) {
-                    // Normal progression: community confirmed current stage → advance one step
-                    newStatus = STATUS_PROGRESSION[currentIndex + 1] as IssueStatusState;
-                    consensusReached = true;
-                } else if (targetIndex > currentIndex) {
-                    // Quick-vote: community confirms issue is already at a future stage → jump directly
-                    newStatus = STATUS_PROGRESSION[targetIndex] as IssueStatusState;
-                    consensusReached = true;
-                }
-            } else if (netScore < -2.0 && targetIndex === currentIndex && currentIndex > 0) {
-                // Backward Transition: community rejects current stage → revert one step
-                newStatus = STATUS_PROGRESSION[currentIndex - 1] as IssueStatusState;
-                consensusReached = true;
-            }
-
-            // Save the Vote Record
-            t.set(voteRef, {
-                userId,
-                statusVotedFor: targetStatus,
-                vote: voteType,
-                weightApplied: userWeight,
-                createdAt: serverTimestamp()
-            });
-
-            // Build update payload
-            const updatePayload: Record<string, any> = {
-                [`statusData.${dbKey}`]: targetData,
-            };
-
-            if (consensusReached && newStatus !== currentStatus) {
-                updatePayload.status = newStatus;
-                // Append a timestamped entry to the public timeline log (arrayUnion equivalent via Firestore array)
-                // We store the log as an array field `statusChangedLog` on the issue document.
-                // Since we cannot use arrayUnion inside runTransaction easily, we read the existing log and push.
-                const existingLog: any[] = issueData.statusChangedLog || [];
-                updatePayload.statusChangedLog = [
-                    ...existingLog,
-                    {
-                        from: currentStatus,
-                        to: newStatus,
-                        at: new Date().toISOString(), // ISO string — close enough for display; server time unavailable inside transaction
-                    }
-                ];
-            }
-
-            t.update(issueRef, updatePayload);
-
-            return {
-                success: true as const,
-                deselected: false as const,
-                consensusReached,
-                newStatus: newStatus as IssueStatusState,
-                currentStats: targetData,
-                _issueTitle: issueData.title,
-                _authorUid: issueData.userId,
-                _previousVoteType: previousVoteType,
-            };
+        const token = await user.getIdToken();
+        const res = await fetch('/api/issues/vote', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                issueId,
+                targetStageKey: targetStatus,
+                voteType
+            })
         });
 
-        if (result.success && result.consensusReached && result.newStatus && result._authorUid) {
-            // Fire-and-forget: Notify author of status change
-            notifyAuthorStatusUpdate(issueId, result._issueTitle || 'Untitled Issue', result._authorUid, result.newStatus).catch(() => { });
-            // Fire-and-forget: Update trust scores for voters based on consensus outcome
-            onConsensusReached(issueId, result.newStatus).catch(() => { });
+        const data = await res.json();
+        if (!res.ok) {
+            return { success: false, error: data.error || 'Failed to record vote' };
         }
 
-        // Only award XP / log vote for actual votes — not deselects
-        if (result.deselected) {
-            awardXp(userId, 'VERIFICATION_VOTE_REVOKED').catch(() => { });
-        } else if ((result as any)._previousVoteType === null) {
-            awardXp(userId, 'VERIFICATION_VOTE').catch(() => { });
-            incrementMissionProgress(userId, '', 'verify').catch(() => { });
-            logVote(userId, issueId).catch(() => { });
-        }
-
-        const { _issueTitle, _authorUid, _previousVoteType, ...cleanResult } = result as any;
-        return cleanResult as VoteOnStatusResult;
+        return data as VoteOnStatusResult;
     } catch (e: any) {
-        console.error("Status vote transaction failed: ", e);
+        console.error("Status vote API request failed: ", e);
         return { success: false as const, error: e.message || String(e) };
     }
 };
@@ -1194,36 +1026,29 @@ export const officialResolveIssue = async (
     afterImageUrl: string
 ): Promise<void> => {
     try {
-        const issueRef = doc(db, 'issues', issueId);
-        await runTransaction(db, async (transaction) => {
-            const snap = await transaction.get(issueRef);
-            if (!snap.exists()) throw new Error('Issue not found');
-            transaction.update(issueRef, {
-                status: 'Resolved',
-                resolvedByUid: officialUid,
-                resolvedByHandle: officialHandle,
-                resolvedByDepartment: department,
-                resolvedStatement: statement,
-                afterImageUrl: afterImageUrl,
-                resolvedAt: Timestamp.now()
-            });
+        const { auth } = await import('./firebase');
+        const user = auth.currentUser;
+        if (!user) throw new Error('User not authenticated');
+
+        const token = await user.getIdToken();
+        const res = await fetch('/api/issues/resolve', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                issueId,
+                department,
+                statement,
+                afterImageUrl
+            })
         });
-        // Fire-and-forget: notify all citizens who hyped this issue
-        const issueSnap = await getDoc(doc(db, 'issues', issueId));
-        const issueData = issueSnap.data();
-        const issueTitle = issueData?.title || 'An issue';
-        const authorUid = issueData?.userId;
 
-        notifyCitizenStatusUpdate(issueId, issueTitle, 'Resolved').catch(() => { });
-
-        if (authorUid) {
-            notifyAuthorStatusUpdate(issueId, issueTitle, authorUid, 'Resolved').catch(() => { });
-            // Reward the reporter: trust boost + XP for getting their issue resolved
-            onReportResolved(authorUid).catch(() => { });
-            awardXp(authorUid, 'REPORT_RESOLVED').catch(() => { });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || 'Failed to resolve issue');
         }
-        // Update trust for voters who participated in verification
-        onConsensusReached(issueId, 'Resolved').catch(() => { });
     } catch (error) {
         console.error("Error resolving issue:", error);
         throw error;
