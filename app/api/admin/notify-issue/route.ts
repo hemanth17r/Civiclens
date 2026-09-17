@@ -39,6 +39,27 @@ export async function POST(request: Request) {
             .where('email', 'in', adminEmails)
             .get();
 
+        // 3. Write in-app notification document for each admin using Admin SDK (bypasses client security rules)
+        if (!adminsSnapshot.empty) {
+            const batch = db.batch();
+            adminsSnapshot.forEach((adminDoc: admin.firestore.QueryDocumentSnapshot) => {
+                const notifRef = db.collection('notifications').doc();
+                batch.set(notifRef, {
+                    targetUid: adminDoc.id,
+                    type: 'admin_new_issue',
+                    isUrgent: true,
+                    title: 'New Issue Needs Approval',
+                    body: `A new issue "${issueTitle}" (${category}) has been reported and needs your review.`,
+                    issueId,
+                    issueTitle,
+                    read: false,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            });
+            await batch.commit();
+        }
+
+        // 4. Collect FCM tokens for Web Push notifications
         const fcmTokens: string[] = [];
         adminsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const data = doc.data();
@@ -48,11 +69,11 @@ export async function POST(request: Request) {
         });
 
         if (fcmTokens.length === 0) {
-            console.log('No FCM tokens found for admins. Skipping push notification.');
-            return NextResponse.json({ success: true, message: 'Admins found but no FCM tokens.' });
+            console.log('In-app notification created. No FCM tokens found for admins, skipping push notification.');
+            return NextResponse.json({ success: true, inAppDelivered: true, pushSent: 0 });
         }
 
-        // 3. Prepare Message
+        // 5. Prepare Push Message
         const message = {
             notification: {
                 title: '🚨 New Issue Needs Review',
@@ -60,20 +81,21 @@ export async function POST(request: Request) {
             },
             data: {
                 issueId: issueId,
-                click_action: `/admin/dashboard`, 
+                click_action: `/admin/dashboard#issues`, 
                 type: 'ADMIN_REVIEW'
             },
             tokens: Array.from(new Set(fcmTokens)), 
         };
 
-        // 4. Send Multicast Message
+        // 6. Send Multicast Message
         const response = await messaging.sendEachForMulticast(message);
-        console.log(`Successfully sent ${response.successCount} messages; ${response.failureCount} failed.`);
+        console.log(`Successfully sent ${response.successCount} push messages; ${response.failureCount} failed.`);
 
         return NextResponse.json({ 
             success: true, 
-            sent: response.successCount, 
-            failed: response.failureCount 
+            inAppDelivered: true,
+            pushSent: response.successCount, 
+            pushFailed: response.failureCount 
         });
 
     } catch (error: any) {

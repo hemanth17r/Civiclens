@@ -82,10 +82,14 @@ export default function AdminDashboardPage() {
 
     const openModule = (modId: string) => {
         window.location.hash = modId;
+        if (modId === 'issues') loadIssuesModule();
+        else if (modId === 'feedback') loadFeedbackModule();
+        else if (modId === 'reports') loadReportsModule();
     };
 
     const goHome = () => {
         window.location.hash = 'home';
+        fetchHomeCounts();
     };
 
     const openReportsTab = (tabId: string) => {
@@ -479,12 +483,22 @@ export default function AdminDashboardPage() {
             <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 text-white px-5 pt-12 pb-8 shadow-md relative z-10">
                 <div className="max-w-6xl mx-auto flex justify-between items-center h-16">
                     {activeModule === 'home' ? (
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <LayoutDashboard size={20} className="text-blue-300" />
-                                <span className="text-xs font-bold uppercase tracking-wider text-blue-300">Admin Control</span>
+                        <div className="flex items-center gap-3">
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <LayoutDashboard size={20} className="text-blue-300" />
+                                    <span className="text-xs font-bold uppercase tracking-wider text-blue-300">Admin Control</span>
+                                </div>
+                                <h1 className="text-2xl font-bold">Admin Workspace</h1>
                             </div>
-                            <h1 className="text-2xl font-bold">Admin Workspace</h1>
+                            <button
+                                onClick={fetchHomeCounts}
+                                disabled={fetching}
+                                className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors flex items-center justify-center cursor-pointer disabled:opacity-50 ml-1 self-end mb-1"
+                                title="Refresh workspace counts"
+                            >
+                                <RefreshCw size={16} className={fetching ? 'animate-spin text-blue-200' : 'text-blue-200'} />
+                            </button>
                         </div>
                     ) : (
                         <div className="flex items-center gap-4">

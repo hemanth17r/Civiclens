@@ -429,61 +429,28 @@ export const notifyAdminsOfNewIssue = async (
     category: string
 ): Promise<void> => {
     try {
-        // 1. Find all admins (role: 'admin' or hardcoded emails)
-        // Note: For production, we should ideally query a 'roles' collection or check custom claims.
-        // For now, we fetch users with specifically matched emails as per firestore.rules
-        const adminEmails = ["hemanthreddya276@gmail.com"];
-        const q = query(
-            collection(db, 'users'),
-            where('email', 'in', adminEmails)
-        );
-        const snapshot = await getDocs(q);
-        const adminUids = snapshot.docs.map(d => d.id);
-
-        if (adminUids.length === 0) return;
-
-        const batch = writeBatch(db);
-        for (const uid of adminUids) {
-            const notifRef = doc(collection(db, 'notifications'));
-            batch.set(notifRef, {
-                targetUid: uid,
-                type: 'admin_new_issue',
-                isUrgent: true,
-                title: 'New Issue Needs Approval',
-                body: `A new issue "${issueTitle}" (${category}) has been reported and needs your review.`,
-                issueId,
-                issueTitle,
-                read: false,
-                createdAt: serverTimestamp()
-            });
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+            console.warn('No authenticated user available for admin notification API call.');
+            return;
         }
-        await batch.commit();
 
-        // 2. Trigger External Notification (Push/Email) via API Route
-        // This is non-blocking to ensure fast issue submission
-        (async () => {
-            try {
-                const currentUser = auth.currentUser;
-                if (!currentUser) {
-                    console.warn('No authenticated user available for push notification API call.');
-                    return;
-                }
-                const idToken = await currentUser.getIdToken();
-                await fetch('/api/admin/notify-issue', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${idToken}`
-                    },
-                    body: JSON.stringify({ issueId, issueTitle, category })
-                });
-            } catch (err) {
-                console.warn('External admin notification failed:', err);
-            }
-        })();
+        const idToken = await currentUser.getIdToken();
+        const res = await fetch('/api/admin/notify-issue', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+            },
+            body: JSON.stringify({ issueId, issueTitle, category })
+        });
 
-    } catch (e) {
-        console.error('Error notifying admins of new issue:', e);
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            console.warn('Admin notification API returned non-OK status:', res.status, errData);
+        }
+    } catch (err) {
+        console.warn('Admin notification dispatch failed:', err);
     }
 };
 
