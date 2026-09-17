@@ -21,7 +21,7 @@ export default function AdminDashboardPage() {
     const [resolvedFeedbacks, setResolvedFeedbacks] = useState<any[]>([]);
     const [userReports, setUserReports] = useState<any[]>([]);
     const [resolvedUserReports, setResolvedUserReports] = useState<any[]>([]);
-    const [fetching, setFetching] = useState(true);
+    const [fetching, setFetching] = useState(false);
 
     // Google Docs style active card view
     const [activeModule, setActiveModule] = useState<'home' | 'issues' | 'feedback' | 'reports'>('home');
@@ -105,6 +105,7 @@ export default function AdminDashboardPage() {
     };
 
     const fetchHomeCounts = async () => {
+        setFetching(true);
         try {
             const [issuesSnap, feedbackSnap, reportsSnap] = await Promise.all([
                 getCountFromServer(query(collection(db, 'issues'), where('status', '==', 'Reported'))),
@@ -118,6 +119,8 @@ export default function AdminDashboardPage() {
             });
         } catch (e) {
             console.warn('Error fetching counts via getCountFromServer:', e);
+        } finally {
+            setFetching(false);
         }
     };
 
