@@ -7,7 +7,8 @@ export type AuthPendingIntent =
     | { type: 'SAVE'; issueId: string }
     | { type: 'REPORT_ISSUE' }
     | { type: 'VOTE_STATUS'; issueId: string; stageKey: IssueStatusState; voteType: 'yes' | 'no' }
-    | { type: 'FOLLOW'; targetUserId: string };
+    | { type: 'FOLLOW'; targetUserId: string }
+    | { type: 'VIEW_CONNECTIONS'; targetUserId: string; connectionType: 'followers' | 'following' };
 
 const INTENT_STORAGE_KEY = 'civiclens_pending_auth_intent';
 
@@ -72,6 +73,7 @@ export async function executePendingIntent(user: User): Promise<void> {
                 await followUser(user.uid, intent.targetUserId);
                 break;
             case 'REPORT_ISSUE':
+            case 'VIEW_CONNECTIONS':
                 // UI only: dialog open triggered via event
                 break;
         }

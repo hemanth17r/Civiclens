@@ -21,6 +21,7 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
     const router = useRouter();
 
     const [isAuthOpen, setIsAuthOpen] = useState(false);
+    const [authTrigger, setAuthTrigger] = useState(`to view ${type}`);
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -29,6 +30,12 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
 
     useEffect(() => {
         if (!isOpen || !userId) return;
+
+        if (!currentUser) {
+            setUsers([]);
+            setLoading(false);
+            return;
+        }
 
         let cancelled = false;
 
@@ -79,6 +86,7 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
     const handleFollowToggle = async (targetId: string, e: React.MouseEvent) => {
         e.stopPropagation(); // prevent navigation
         if (!currentUser) {
+            setAuthTrigger("to follow citizens");
             setIsAuthOpen(true);
             return;
         }
@@ -152,22 +160,44 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
                         </div>
 
                         {/* Search */}
-                        <div className="p-4 flex-shrink-0">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                <input
-                                    type="text"
-                                    placeholder="Search"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-gray-100 text-gray-900 text-sm rounded-xl py-2 pl-9 pr-4 focus:outline-none focus:ring-2 focus:ring-gray-200"
-                                />
+                        {currentUser && (
+                            <div className="p-4 flex-shrink-0">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                    <input
+                                        type="text"
+                                        placeholder="Search"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="w-full bg-gray-100 text-gray-900 text-sm rounded-xl py-2 pl-9 pr-4 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                                    />
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* List */}
                         <div className="flex-1 overflow-y-auto p-4 pt-0">
-                            {loading ? (
+                            {!currentUser ? (
+                                <div className="flex flex-col items-center justify-center p-6 text-center py-12">
+                                    <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-3">
+                                        <UserCircle2 size={28} />
+                                    </div>
+                                    <h3 className="text-base font-bold text-gray-900 mb-1">Sign in to view {type}</h3>
+                                    <p className="text-xs text-gray-500 mb-5 max-w-[240px]">
+                                        Sign in to see who is connected with this citizen and join the community.
+                                    </p>
+                                    <motion.button
+                                        {...tapScale.button}
+                                        onClick={() => {
+                                            setAuthTrigger(`to view ${type}`);
+                                            setIsAuthOpen(true);
+                                        }}
+                                        className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold shadow-sm transition-all cursor-pointer"
+                                    >
+                                        Sign In
+                                    </motion.button>
+                                </div>
+                            ) : loading ? (
                                 <div className="space-y-4 pt-2">
                                     {[1, 2, 3, 4, 5].map((n) => (
                                         <div key={n} className="flex items-center justify-between animate-pulse">
@@ -241,7 +271,7 @@ export default function ConnectionsModal({ isOpen, onClose, type, userId }: Conn
                     <AuthModule
                         isOpen={isAuthOpen}
                         onClose={() => setIsAuthOpen(false)}
-                        triggerAction="to follow citizens"
+                        triggerAction={authTrigger}
                     />
                 </div>
             )}

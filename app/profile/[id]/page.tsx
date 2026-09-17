@@ -149,6 +149,8 @@ export default function PublicProfilePage() {
             if (intent?.type === 'FOLLOW' && intent.targetUserId === profileId) {
                 setIsFollowing(true);
                 setFollowersCount(prev => prev + 1);
+            } else if (intent?.type === 'VIEW_CONNECTIONS' && intent.targetUserId === profileId) {
+                setConnectionsModalType(intent.connectionType);
             }
         };
         window.addEventListener('civiclens:intent-executed', handleIntentExecuted);
@@ -344,14 +346,38 @@ export default function PublicProfilePage() {
                     <div className="pt-4 flex gap-6 justify-center md:justify-start">
                         <div
                             className="text-center md:text-left cursor-pointer hover:opacity-80 transition-opacity"
-                            onClick={() => setConnectionsModalType('followers')}
+                            onClick={() => {
+                                if (!currentUser) {
+                                    setPendingIntent({
+                                        type: 'VIEW_CONNECTIONS',
+                                        targetUserId: profileId,
+                                        connectionType: 'followers',
+                                    });
+                                    setAuthTrigger("to view followers");
+                                    setIsAuthOpen(true);
+                                    return;
+                                }
+                                setConnectionsModalType('followers');
+                            }}
                         >
                             <p className="text-xl font-bold text-gray-900">{followersCount}</p>
                             <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Followers</p>
                         </div>
                         <div
                             className="text-center md:text-left cursor-pointer hover:opacity-80 transition-opacity"
-                            onClick={() => setConnectionsModalType('following')}
+                            onClick={() => {
+                                if (!currentUser) {
+                                    setPendingIntent({
+                                        type: 'VIEW_CONNECTIONS',
+                                        targetUserId: profileId,
+                                        connectionType: 'following',
+                                    });
+                                    setAuthTrigger("to view following");
+                                    setIsAuthOpen(true);
+                                    return;
+                                }
+                                setConnectionsModalType('following');
+                            }}
                         >
                             <p className="text-xl font-bold text-gray-900">{followingCount}</p>
                             <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Following</p>

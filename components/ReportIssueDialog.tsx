@@ -16,6 +16,9 @@ interface ReportIssueDialogProps {
 
 const categories = ['Road', 'Waste', 'Water', 'Safety', 'Infrastructure', 'Environment', 'Other'];
 
+// Feature flag: set NEXT_PUBLIC_ENABLE_VIDEO_UPLOADS="true" in .env.local to immediately re-enable video uploads
+const ENABLE_VIDEO_UPLOADS = process.env.NEXT_PUBLIC_ENABLE_VIDEO_UPLOADS === 'true';
+
 const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }) => {
     const { user, userProfile } = useAuth();
     const [loading, setLoading] = useState(false);
@@ -136,7 +139,15 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
             return;
         }
 
-        const validFiles = newFiles.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+        const validFiles = newFiles.filter(f => f.type.startsWith('image/') || (ENABLE_VIDEO_UPLOADS && f.type.startsWith('video/')));
+        
+        if (validFiles.length < newFiles.length) {
+            alert(ENABLE_VIDEO_UPLOADS 
+                ? 'Only image and video files are supported.' 
+                : 'Only image files (JPG, PNG, WebP) are supported for now.'
+            );
+        }
+
         setMediaFiles(prev => [...prev, ...validFiles]);
 
         validFiles.forEach(file => {
@@ -192,7 +203,9 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 {/* Media Upload */}
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">Photo / Video Evidence (Max 3)</label>
+                                    <label className="text-sm font-medium text-gray-700">
+                                        {ENABLE_VIDEO_UPLOADS ? 'Photo / Video Evidence (Max 3)' : 'Photo Evidence (Max 3)'}
+                                    </label>
                                     <div className="flex gap-3 overflow-x-auto pb-2">
                                         {/* Previews */}
                                         {mediaPreviews.map((previewUrl, idx) => (
@@ -217,13 +230,15 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                                             <div className="relative w-24 h-24 flex-shrink-0 border-2 border-dashed border-gray-300 hover:border-blue-400 bg-gray-50 hover:bg-blue-50 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:text-blue-500 transition-colors cursor-pointer group">
                                                 <input
                                                     type="file"
-                                                    accept="image/*,video/*"
+                                                    accept={ENABLE_VIDEO_UPLOADS ? "image/*,video/*" : "image/*"}
                                                     multiple
                                                     onChange={handleMediaChange}
                                                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                                 />
                                                 <Camera size={24} className="mb-1 group-hover:scale-110 transition-transform" />
-                                                <span className="text-[10px] font-semibold">Add Media</span>
+                                                <span className="text-[10px] font-semibold">
+                                                    {ENABLE_VIDEO_UPLOADS ? "Add Media" : "Add Photo"}
+                                                </span>
                                             </div>
                                         )}
                                     </div>
