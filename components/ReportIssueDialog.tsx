@@ -131,38 +131,32 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
     };
 
     const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files) return;
-        const newFiles = Array.from(e.target.files);
+        if (!e.target.files || e.target.files.length === 0) return;
+        const selectedFile = e.target.files[0];
 
-        if (mediaFiles.length + newFiles.length > 3) {
-            alert('You can only upload up to 3 media files.');
+        const isValid = selectedFile.type.startsWith('image/') || (ENABLE_VIDEO_UPLOADS && selectedFile.type.startsWith('video/'));
+        
+        if (!isValid) {
+            alert(ENABLE_VIDEO_UPLOADS 
+                ? 'Only image and video files are supported.' 
+                : 'Only image files (JPG, PNG, WebP) are supported.'
+            );
             return;
         }
 
-        const validFiles = newFiles.filter(f => f.type.startsWith('image/') || (ENABLE_VIDEO_UPLOADS && f.type.startsWith('video/')));
-        
-        if (validFiles.length < newFiles.length) {
-            alert(ENABLE_VIDEO_UPLOADS 
-                ? 'Only image and video files are supported.' 
-                : 'Only image files (JPG, PNG, WebP) are supported for now.'
-            );
-        }
+        // Clean up previous preview URL to prevent memory leaks
+        mediaPreviews.forEach(url => URL.revokeObjectURL(url));
 
-        setMediaFiles(prev => [...prev, ...validFiles]);
-
-        validFiles.forEach(file => {
-            const objectUrl = URL.createObjectURL(file);
-            setMediaPreviews(prev => [...prev, objectUrl]);
-        });
+        const objectUrl = URL.createObjectURL(selectedFile);
+        setMediaFiles([selectedFile]);
+        setMediaPreviews([objectUrl]);
     };
 
-    const removeMedia = (index: number) => {
-        setMediaFiles(prev => prev.filter((_, i) => i !== index));
+    const removeMedia = (_index?: number) => {
+        setMediaFiles([]);
         setMediaPreviews(prev => {
-            const newPreviews = [...prev];
-            URL.revokeObjectURL(newPreviews[index]);
-            newPreviews.splice(index, 1);
-            return newPreviews;
+            prev.forEach(url => URL.revokeObjectURL(url));
+            return [];
         });
     };
 
@@ -204,12 +198,12 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                                 {/* Media Upload */}
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700">
-                                        {ENABLE_VIDEO_UPLOADS ? 'Photo / Video Evidence (Max 3)' : 'Photo Evidence (Max 3)'}
+                                        {ENABLE_VIDEO_UPLOADS ? 'Photo / Video Evidence (1 file)' : 'Photo Evidence (1 photo)'}
                                     </label>
-                                    <div className="flex gap-3 overflow-x-auto pb-2">
-                                        {/* Previews */}
+                                    <div className="flex gap-3 items-center">
+                                        {/* Preview */}
                                         {mediaPreviews.map((previewUrl, idx) => (
-                                            <div key={idx} className="relative w-24 h-24 flex-shrink-0 bg-gray-100 rounded-xl overflow-hidden border border-gray-200">
+                                            <div key={idx} className="relative w-28 h-28 flex-shrink-0 bg-gray-100 rounded-xl overflow-hidden border border-gray-200">
                                                 {mediaFiles[idx]?.type.startsWith('video/') ? (
                                                     <video src={previewUrl} className="w-full h-full object-cover" />
                                                 ) : (
@@ -218,25 +212,25 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                                                 <button
                                                     type="button"
                                                     onClick={() => removeMedia(idx)}
-                                                    className="absolute top-1 right-1 bg-white/90 p-1 rounded-full shadow-sm hover:bg-red-50 hover:text-red-500 transition-colors"
+                                                    className="absolute top-1 right-1 bg-white/90 p-1 rounded-full shadow-sm hover:bg-red-50 hover:text-red-500 transition-colors cursor-pointer"
+                                                    title="Remove photo"
                                                 >
                                                     <X size={14} />
                                                 </button>
                                             </div>
                                         ))}
 
-                                        {/* Add Button */}
-                                        {mediaPreviews.length < 3 && (
-                                            <div className="relative w-24 h-24 flex-shrink-0 border-2 border-dashed border-gray-300 hover:border-blue-400 bg-gray-50 hover:bg-blue-50 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:text-blue-500 transition-colors cursor-pointer group">
+                                        {/* Add Button (only shown when no photo is selected) */}
+                                        {mediaPreviews.length === 0 && (
+                                            <div className="relative w-28 h-28 flex-shrink-0 border-2 border-dashed border-gray-300 hover:border-blue-400 bg-gray-50 hover:bg-blue-50 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:text-blue-500 transition-colors cursor-pointer group">
                                                 <input
                                                     type="file"
                                                     accept={ENABLE_VIDEO_UPLOADS ? "image/*,video/*" : "image/*"}
-                                                    multiple
                                                     onChange={handleMediaChange}
                                                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                                 />
-                                                <Camera size={24} className="mb-1 group-hover:scale-110 transition-transform" />
-                                                <span className="text-[10px] font-semibold">
+                                                <Camera size={26} className="mb-1 group-hover:scale-110 transition-transform" />
+                                                <span className="text-[11px] font-semibold">
                                                     {ENABLE_VIDEO_UPLOADS ? "Add Media" : "Add Photo"}
                                                 </span>
                                             </div>
