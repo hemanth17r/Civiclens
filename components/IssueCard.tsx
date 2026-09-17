@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { MapPin, Flame, MessageCircle, Bookmark, User, Share2, BookmarkCheck, CheckCircle, Info } from 'lucide-react';
+import { MapPin, Flame, MessageCircle, Bookmark, User, Share2, BookmarkCheck, CheckCircle, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { clsx } from 'clsx';
 import { Issue, hypeIssue, unhypeIssue, hasUserHyped, saveIssue, unsaveIssue, hasUserSaved, getIssueTimeMs } from '@/lib/issues';
@@ -18,6 +18,7 @@ import { tapScale } from '@/lib/motion';
 
 const AuthModule = dynamic(() => import('./AuthModule'), { ssr: false });
 const CommentDrawer = dynamic(() => import('./CommentDrawer'), { ssr: false });
+const CommentSection = dynamic(() => import('./CommentSection'), { ssr: false });
 const ShareModal = dynamic(() => import('./ShareModal'), { ssr: false });
 
 interface IssueCardProps {
@@ -38,6 +39,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
     const [optimisticCommentCount, setOptimisticCommentCount] = useState(issue.commentCount || 0);
     const [showHeartAnim, setShowHeartAnim] = useState(false);
     const [isCommentOpen, setIsCommentOpen] = useState(false);
+    const [isInlineCommentsOpen, setIsInlineCommentsOpen] = useState(false);
     const [isShareOpen, setIsShareOpen] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
     const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
@@ -61,6 +63,16 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
             }
         }
     };
+
+    const scrollMedia = useCallback((direction: 'left' | 'right') => {
+        if (mediaContainerRef.current) {
+            const width = mediaContainerRef.current.clientWidth;
+            mediaContainerRef.current.scrollBy({
+                left: direction === 'left' ? -width : width,
+                behavior: 'smooth'
+            });
+        }
+    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -206,6 +218,15 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
         router.push(`/issue/${issue.id}`);
     };
 
+    const handleCommentClick = useCallback(() => {
+        setIsAuthModalOpen(false);
+        if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+            setIsInlineCommentsOpen(prev => !prev);
+        } else {
+            setIsCommentOpen(true);
+        }
+    }, []);
+
 
 
     return (
@@ -291,19 +312,43 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
 
                         {/* Carousel Dots */}
                         {mediaList.length > 1 && (
-                            <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 z-20">
-                                {mediaList.map((_, idx) => (
-                                    <div
-                                        key={idx}
-                                        className={clsx(
-                                            "h-1.5 rounded-full transition-all duration-300 shadow-sm",
-                                            currentMediaIndex === idx
-                                                ? "w-4 bg-blue-500"
-                                                : "w-1.5 bg-white/70"
-                                        )}
-                                    />
-                                ))}
-                            </div>
+                            <>
+                                <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 z-20">
+                                    {mediaList.map((_, idx) => (
+                                        <div
+                                            key={idx}
+                                            className={clsx(
+                                                "h-1.5 rounded-full transition-all duration-300 shadow-sm",
+                                                currentMediaIndex === idx
+                                                    ? "w-4 bg-blue-500"
+                                                    : "w-1.5 bg-white/70"
+                                            )}
+                                        />
+                                    ))}
+                                </div>
+
+                                {/* Desktop-only Carousel Navigation Arrows */}
+                                {currentMediaIndex > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); scrollMedia('left'); }}
+                                        className="hidden md:flex absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 cursor-pointer shadow-sm"
+                                        aria-label="Previous image"
+                                    >
+                                        <ChevronLeft size={18} />
+                                    </button>
+                                )}
+                                {currentMediaIndex < mediaList.length - 1 && (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); scrollMedia('right'); }}
+                                        className="hidden md:flex absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 cursor-pointer shadow-sm"
+                                        aria-label="Next image"
+                                    >
+                                        <ChevronRight size={18} />
+                                    </button>
+                                )}
+                            </>
                         )}
                     </>
                 ) : (
@@ -374,14 +419,11 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
 
                     <motion.button
                         {...tapScale.icon}
-                        onClick={() => {
-                            setIsAuthModalOpen(false);
-                            setIsCommentOpen(true);
-                        }}
+                        onClick={handleCommentClick}
                         className="flex items-center gap-1.5 text-gray-900 hover:text-blue-600 transition-colors cursor-pointer"
                         aria-label="Comments"
                     >
-                        <MessageCircle size={26} className="text-gray-900" />
+                        <MessageCircle size={26} className={clsx("transition-colors", isInlineCommentsOpen ? "text-blue-600 fill-blue-50" : "text-gray-900")} />
                         {optimisticCommentCount > 0 && (
                             <span className="text-xs font-semibold text-gray-700">{optimisticCommentCount}</span>
                         )}
@@ -417,14 +459,33 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                 </div>
 
                 <button
-                    onClick={() => {
-                        setIsAuthModalOpen(false);
-                        setIsCommentOpen(true);
-                    }}
-                    className="text-gray-400 text-sm mt-2 font-medium cursor-pointer"
+                    onClick={handleCommentClick}
+                    className="text-gray-400 hover:text-gray-600 text-sm mt-2 font-medium cursor-pointer transition-colors block"
                 >
-                    View all comments
+                    {optimisticCommentCount > 0
+                        ? (isInlineCommentsOpen ? 'Hide comments' : `View all ${optimisticCommentCount} comments`)
+                        : (isInlineCommentsOpen ? 'Hide comments' : 'Add a comment...')}
                 </button>
+
+                {/* Instagram Desktop Style Quick Comment Bar */}
+                {!isInlineCommentsOpen && (
+                    <div
+                        onClick={handleCommentClick}
+                        className="hidden md:flex items-center justify-between pt-2.5 mt-2.5 border-t border-gray-100 text-xs text-gray-400 cursor-pointer hover:text-gray-600 group"
+                    >
+                        <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
+                                {user?.photoURL ? (
+                                    <img src={user.photoURL} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                    <User size={12} className="text-gray-400" />
+                                )}
+                            </div>
+                            <span>Add a comment...</span>
+                        </div>
+                        <span className="font-semibold text-blue-600 text-xs opacity-0 group-hover:opacity-100 transition-opacity">Post</span>
+                    </div>
+                )}
             </div>
 
             {/* Official MCD Resolution Banner */}
@@ -480,6 +541,19 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                             </div>
                         )}
                     </div>
+                </div>
+            )}
+
+            {/* Desktop Inline Comments Thread */}
+            {isInlineCommentsOpen && (
+                <div className="hidden md:block border-t border-gray-100 bg-gray-50/20 animate-in fade-in duration-200">
+                    <CommentSection
+                        issueId={issue.id}
+                        onCommentAdded={() => setOptimisticCommentCount(prev => prev + 1)}
+                        maxHeightClass="max-h-80"
+                        showHeader={false}
+                        autoFocus={true}
+                    />
                 </div>
             )}
 

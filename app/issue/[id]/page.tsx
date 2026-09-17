@@ -16,7 +16,7 @@ import { motion } from 'framer-motion';
 import { tapScale } from '@/lib/motion';
 import dynamic from 'next/dynamic';
 
-const CommentDrawer = dynamic(() => import('@/components/CommentDrawer'), { ssr: false });
+const CommentSection = dynamic(() => import('@/components/CommentSection'), { ssr: false });
 
 // ═══════════════════════════════════════════════════════════════════════
 // LIFECYCLE CONFIGURATION — 5-stage progression
@@ -116,7 +116,6 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
     // Delete Modal State
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [isCommentOpen, setIsCommentOpen] = useState(false);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -712,26 +711,30 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                     </div>
                 )}
 
-                {/* Community Discussion Banner / Trigger */}
-                <div className="bg-gradient-to-r from-blue-50/70 to-indigo-50/70 border border-blue-100 rounded-2xl p-4 mb-8 flex items-center justify-between shadow-xs">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
-                            <MessageCircle size={20} />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-bold text-gray-900">Community Discussion</h3>
-                            <p className="text-xs text-gray-500">
-                                {issue.commentCount ? `${issue.commentCount} ${issue.commentCount === 1 ? 'comment' : 'comments'} posted` : 'Join the discussion or leave an update'}
-                            </p>
+                {/* Community Discussion - Embedded Directly In Page (Zero Pop-ups) */}
+                <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden mb-8">
+                    <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+                        <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                                <MessageCircle size={18} />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-gray-900">Community Discussion</h3>
+                                <p className="text-xs text-gray-500">
+                                    {issue.commentCount ? `${issue.commentCount} ${issue.commentCount === 1 ? 'comment' : 'comments'} posted` : 'Join the discussion or leave an update'}
+                                </p>
+                            </div>
                         </div>
                     </div>
-                    <button
-                        onClick={() => setIsCommentOpen(true)}
-                        className="px-4 py-2 bg-white hover:bg-blue-50 text-blue-600 font-bold text-xs rounded-xl border border-blue-200 transition-all shadow-xs hover:border-blue-300 active:scale-95 flex items-center gap-1.5 cursor-pointer"
-                    >
-                        <MessageCircle size={14} />
-                        <span>View Comments</span>
-                    </button>
+
+                    <CommentSection
+                        issueId={issue.id}
+                        onCommentAdded={() => {
+                            setIssue(prev => prev ? { ...prev, commentCount: (prev.commentCount || 0) + 1 } : null);
+                        }}
+                        maxHeightClass="max-h-[500px]"
+                        showHeader={false}
+                    />
                 </div>
 
                 {/* Official Resolution Banner */}
@@ -820,16 +823,6 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                 isOpen={isAuthOpen}
                 onClose={() => setIsAuthOpen(false)}
                 triggerAction={authTrigger}
-            />
-
-            {/* Community Comment Drawer */}
-            <CommentDrawer
-                isOpen={isCommentOpen}
-                onClose={() => setIsCommentOpen(false)}
-                issueId={issue.id}
-                onCommentAdded={() => {
-                    setIssue(prev => prev ? { ...prev, commentCount: (prev.commentCount || 0) + 1 } : null);
-                }}
             />
         </div>
     );

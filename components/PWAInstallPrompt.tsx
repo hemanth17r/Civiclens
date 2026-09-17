@@ -142,7 +142,7 @@ const PWAInstallPrompt = () => {
           </div>
           <div>
             <h3 className="font-bold text-gray-900">Install CivicLens</h3>
-            <p className="text-xs text-gray-500">Add to home screen for instant updates</p>
+            <p className="text-xs text-gray-500">Install app for a better experience</p>
           </div>
         </div>
         <button onClick={handleDismiss} className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-50">
