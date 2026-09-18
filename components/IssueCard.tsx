@@ -45,6 +45,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
     const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
     const mediaContainerRef = React.useRef<HTMLDivElement>(null);
     const [showPendingInfo, setShowPendingInfo] = useState(false);
+    const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
     const pendingInfoRef = React.useRef<HTMLDivElement>(null);
 
     const mediaList = issue.mediaUrls && issue.mediaUrls.length > 0
@@ -230,12 +231,12 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
 
 
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden break-inside-avoid relative">
+        <div className="bg-white border-b border-gray-100 pb-3 mb-2 md:rounded-2xl md:border md:shadow-xs md:mb-6 overflow-hidden break-inside-avoid relative w-full">
 
             {/* 1. Header: Instagram style */}
-            <div className="flex items-center justify-between p-3.5">
-                <div className="flex items-center gap-3">
-                    <Link href={`/profile/${issue.userId}`} className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-400 to-purple-400 p-[2px] block cursor-pointer hover:opacity-90 transition-opacity">
+            <div className="flex items-center justify-between px-3.5 py-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                    <Link href={`/profile/${issue.userId}`} className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-400 to-purple-400 p-[2px] block cursor-pointer hover:opacity-90 transition-opacity shrink-0">
                         <div className="w-full h-full rounded-full border-2 border-white bg-gray-100 overflow-hidden text-gray-400 flex items-center justify-center">
                             {issue.userAvatar ? (
                                 <img src={issue.userAvatar} alt="Avatar" className="w-full h-full object-cover" />
@@ -244,34 +245,67 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                             )}
                         </div>
                     </Link>
-                    <div>
+                    <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-bold text-gray-900 leading-none">
+                            <p className="text-sm font-bold text-gray-900 leading-none truncate">
                                 {issue.userHandle || '@citizen'}
                             </p>
-                            <span className="text-gray-300">•</span>
-                            <span className="text-xs text-gray-500 font-medium">{timeAgo}</span>
+                            <span className="text-gray-300 text-xs">•</span>
+                            <span className="text-xs text-gray-500 font-medium shrink-0">{timeAgo}</span>
                         </div>
-                        <p className="text-xs text-blue-600 mt-0.5 flex items-center gap-0.5 font-medium">
-                            <MapPin size={10} className="fill-blue-100" />
-                            {issue.cityName ? issue.cityName : (issue.location || 'Unknown Location')}
+                        <p className="text-xs text-blue-600 mt-0.5 flex items-center gap-0.5 font-medium truncate">
+                            <MapPin size={10} className="fill-blue-100 shrink-0" />
+                            <span className="truncate">{issue.cityName ? issue.cityName : (issue.location || 'Unknown Location')}</span>
                         </p>
                     </div>
                 </div>
 
-                <motion.button
-                    {...tapScale.icon}
-                    onClick={handleSaveToggle}
-                    className="text-gray-400 hover:text-gray-900 p-1 transition-colors cursor-pointer"
-                    aria-label="Bookmark"
-                >
-                    {isSaved ? <BookmarkCheck size={24} className="text-gray-900 fill-gray-900" /> : <Bookmark size={24} className="text-gray-900" />}
-                </motion.button>
+                {/* Right: Status Badge & Info */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                    <motion.button
+                        whileHover={{ scale: 1.04 }}
+                        whileTap={{ scale: 0.94 }}
+                        onClick={handleStatusClick}
+                        className={clsx(
+                            "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border shadow-2xs flex items-center gap-1 cursor-pointer transition-colors",
+                            statusColor
+                        )}
+                        title="View issue details"
+                    >
+                        {displayStatus}
+                    </motion.button>
+
+                    {/* Pending Approval Badge */}
+                    {issue.status === 'Reported' && (
+                        <div className="relative" ref={pendingInfoRef}>
+                            <motion.button
+                                whileHover={{ scale: 1.04 }}
+                                whileTap={{ scale: 0.94 }}
+                                onClick={(e) => { e.stopPropagation(); setShowPendingInfo(v => !v); }}
+                                className="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-amber-200 bg-amber-50 text-amber-700 flex items-center gap-1 cursor-pointer"
+                                title="Needs Admin Approval"
+                            >
+                                <Info size={11} />
+                            </motion.button>
+                            {showPendingInfo && (
+                                <div className="absolute right-0 top-full mt-2 w-[240px] sm:w-64 bg-white border border-gray-100 rounded-2xl shadow-xl p-4 z-30 animate-in fade-in slide-in-from-top-2 duration-200 cursor-default" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Info size={14} className="text-amber-500 flex-shrink-0" />
+                                        <span className="text-xs font-bold text-gray-900 uppercase tracking-wider">Needs Admin Approval</span>
+                                    </div>
+                                    <p className="text-xs text-gray-600 leading-relaxed normal-case">
+                                        This report requires admin verification before it can be displayed in the public feed where others can view and hype it. It is currently only visible to you.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {/* 2. Media: 1:1 Aspect Ratio & Double Tap */}
+            {/* 2. Media: 4:5 mobile portrait / 1:1 desktop */}
             <div
-                className="aspect-square w-full bg-gray-100 relative group overflow-hidden"
+                className="aspect-[4/5] sm:aspect-square w-full bg-gray-100 relative group overflow-hidden"
                 onDoubleClick={handleDoubleTap}
             >
                 {mediaList.length > 0 ? (
@@ -313,7 +347,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                         {/* Carousel Dots */}
                         {mediaList.length > 1 && (
                             <>
-                                <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 z-20">
+                                <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 z-20">
                                     {mediaList.map((_, idx) => (
                                         <div
                                             key={idx}
@@ -359,53 +393,15 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
 
                 {/* Heart Animation Overlay */}
                 <HeartAnimation isVisible={showHeartAnim} />
-
-                {/* Status Pill — shows current status, links to timeline */}
-                <div className="absolute top-4 right-4 z-10 flex flex-col items-end gap-2">
-                    <motion.button
-                        whileHover={{ scale: 1.04 }}
-                        whileTap={{ scale: 0.94 }}
-                        onClick={handleStatusClick}
-                        className={clsx(
-                            "px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md backdrop-blur-md border border-white/20 flex items-center gap-1 cursor-pointer hover:opacity-90",
-                            statusColor
-                        )}>
-                        {displayStatus}
-                    </motion.button>
-                    {/* Pending Approval Badge */}
-                    {issue.status === 'Reported' && (
-                        <div className="relative" ref={pendingInfoRef}>
-                            <motion.button
-                                whileHover={{ scale: 1.04 }}
-                                whileTap={{ scale: 0.94 }}
-                                onClick={(e) => { e.stopPropagation(); setShowPendingInfo(v => !v); }}
-                                className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md backdrop-blur-md border border-white/20 flex items-center gap-1 cursor-pointer bg-amber-500 text-white hover:opacity-90"
-                            >
-                                <Info size={12} /> Pending Approval
-                            </motion.button>
-                            {showPendingInfo && (
-                                <div className="absolute right-0 top-full mt-2 w-[240px] sm:w-64 bg-white border border-gray-100 rounded-2xl shadow-xl p-4 z-20 animate-in fade-in slide-in-from-top-2 duration-200 cursor-default" onClick={(e) => e.stopPropagation()}>
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Info size={14} className="text-amber-500 flex-shrink-0" />
-                                        <span className="text-xs font-bold text-gray-900 uppercase tracking-wider">Needs Admin Approval</span>
-                                    </div>
-                                    <p className="text-xs text-gray-600 leading-relaxed normal-case">
-                                        This report requires admin verification before it can be displayed in the public feed where others can view and hype it. It is currently only visible to you.
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
             </div>
 
-            {/* 3. Action Bar */}
-            <div className="px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-5">
+            {/* 3. Action Bar: Instagram Layout */}
+            <div className="px-3.5 pt-3 pb-2 flex items-center justify-between">
+                <div className="flex items-center gap-4">
                     <motion.button
                         {...tapScale.icon}
                         onClick={handleHype}
-                        className="flex items-center gap-1.5 cursor-pointer"
+                        className="flex items-center gap-1 cursor-pointer"
                         aria-label="Hype"
                     >
                         <Flame
@@ -420,10 +416,10 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                     <motion.button
                         {...tapScale.icon}
                         onClick={handleCommentClick}
-                        className="flex items-center gap-1.5 text-gray-900 hover:text-blue-600 transition-colors cursor-pointer"
+                        className="flex items-center gap-1 text-gray-900 hover:text-blue-600 transition-colors cursor-pointer"
                         aria-label="Comments"
                     >
-                        <MessageCircle size={26} className={clsx("transition-colors", isInlineCommentsOpen ? "text-blue-600 fill-blue-50" : "text-gray-900")} />
+                        <MessageCircle size={25} className={clsx("transition-colors", isInlineCommentsOpen ? "text-blue-600 fill-blue-50" : "text-gray-900")} />
                         {optimisticCommentCount > 0 && (
                             <span className="text-xs font-semibold text-gray-700">{optimisticCommentCount}</span>
                         )}
@@ -432,40 +428,68 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                     <motion.button
                         {...tapScale.icon}
                         onClick={() => setIsShareOpen(true)}
-                        className="flex items-center gap-1.5 text-gray-900 hover:text-blue-600 transition-colors cursor-pointer"
+                        className="flex items-center gap-1 text-gray-900 hover:text-blue-600 transition-colors cursor-pointer"
                         aria-label="Share"
                     >
-                        <Share2 size={24} />
+                        <Share2 size={23} />
                         {(issue.sharesCount ?? 0) > 0 && (
                             <span className="text-xs font-semibold text-gray-700">{issue.sharesCount}</span>
                         )}
                     </motion.button>
                 </div>
+
+                <motion.button
+                    {...tapScale.icon}
+                    onClick={handleSaveToggle}
+                    className="text-gray-900 hover:text-gray-600 transition-colors cursor-pointer p-0.5"
+                    aria-label="Bookmark"
+                >
+                    {isSaved ? (
+                        <BookmarkCheck size={25} className="text-gray-900 fill-gray-900" />
+                    ) : (
+                        <Bookmark size={25} className="text-gray-900" />
+                    )}
+                </motion.button>
             </div>
 
             {/* 4. Likes & Content */}
-            <div className="px-4 pb-4">
-                <p className="font-bold text-sm text-gray-900 mb-2">
-                    {optimisticVotes} Hypes
+            <div className="px-3.5 pb-3">
+                <p className="font-bold text-xs text-gray-900 mb-1.5">
+                    {optimisticVotes} {optimisticVotes === 1 ? 'hype' : 'hypes'}
                 </p>
-                <div className="text-sm text-gray-900">
-                    <span className="font-bold mr-2">{issue.userHandle || 'user'}</span>
-                    {issue.title}
+
+                <div className="text-xs text-gray-900 leading-snug">
+                    <span className="font-bold mr-1.5">{issue.userHandle || 'citizen'}</span>
+                    <span className="font-semibold text-gray-900">{issue.title}</span>
                     {issue.description && (
-                        <span className="text-gray-600 font-normal ml-1">
-                            - {issue.description.length > 60 ? issue.description.substring(0, 60) + "..." : issue.description}
+                        <span className="text-gray-700 font-normal ml-1">
+                            — {isDescriptionExpanded ? issue.description : (issue.description.length > 90 ? issue.description.slice(0, 90) + '...' : issue.description)}
+                            {!isDescriptionExpanded && issue.description.length > 90 && (
+                                <button
+                                    onClick={() => setIsDescriptionExpanded(true)}
+                                    className="text-gray-400 hover:text-gray-600 text-xs font-normal ml-1 cursor-pointer"
+                                >
+                                    more
+                                </button>
+                            )}
                         </span>
                     )}
                 </div>
 
+                {/* Comment counter link */}
                 <button
                     onClick={handleCommentClick}
-                    className="text-gray-400 hover:text-gray-600 text-sm mt-2 font-medium cursor-pointer transition-colors block"
+                    className="text-gray-400 hover:text-gray-600 text-xs mt-1.5 font-medium cursor-pointer transition-colors block"
                 >
                     {optimisticCommentCount > 0
                         ? (isInlineCommentsOpen ? 'Hide comments' : `View all ${optimisticCommentCount} comments`)
                         : (isInlineCommentsOpen ? 'Hide comments' : 'Add a comment...')}
                 </button>
+
+                {/* Uppercase relative timestamp */}
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-1">
+                    {timeAgo}
+                </p>
 
                 {/* Instagram Desktop Style Quick Comment Bar */}
                 {!isInlineCommentsOpen && (

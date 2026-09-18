@@ -17,6 +17,7 @@ import FeedSkeleton from '@/components/FeedSkeleton';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { springJelly, tapScale } from '@/lib/motion';
+import { compressImage } from '@/lib/imageCompression';
 import { clsx } from 'clsx';
 import dynamic from 'next/dynamic';
 import { INDIAN_CITIES_SORTED_BY_TIER } from '@/data/cities';
@@ -231,11 +232,12 @@ export default function ProfilePage() {
         setDrawer('editProfile');
     };
 
-    const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
             const file = e.target.files[0];
-            setPhotoFile(file);
-            setPhotoPreview(URL.createObjectURL(file));
+            const compressed = await compressImage(file, { maxDimension: 512, quality: 0.85 });
+            setPhotoFile(compressed);
+            setPhotoPreview(URL.createObjectURL(compressed));
         }
     };
 

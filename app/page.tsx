@@ -202,10 +202,10 @@ export default function Home() {
                 onReportClick={handleReportClick}
             />
 
-            <div className="max-w-2xl mx-auto px-4 pt-2">
+            <div className="max-w-xl mx-auto px-0 md:px-4 pt-1 md:pt-4">
 
                 {/* Feed Header */}
-                <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center justify-between mb-3 px-4 md:px-0">
                     {(() => {
                         const cityName = user ? userProfile?.city : 'Delhi';
                         return cityName ? (
@@ -220,7 +220,7 @@ export default function Home() {
 
                 {/* City nudge — shown when logged-in user hasn't set a city */}
                 {user && !userProfile?.city && !authLoading && (
-                    <div className="mb-6 bg-blue-50 border border-blue-100 rounded-2xl p-5 text-center flex flex-col items-center">
+                    <div className="mx-4 md:mx-0 mb-4 bg-blue-50 border border-blue-100 rounded-2xl p-5 text-center flex flex-col items-center">
                         <MapPin className="text-blue-500 mb-2 animate-bounce" size={28} />
                         <h3 className="text-sm font-bold text-gray-900 mb-1">Set your city to see your local feed</h3>
                         <p className="text-xs text-gray-500 mb-4">
@@ -238,7 +238,7 @@ export default function Home() {
 
                 {/* Feed Content */}
                 <PullToRefresh onRefresh={async () => { await fetchFeed(); }} className="min-h-[60vh]">
-                    <div className="space-y-6">
+                    <div className="space-y-1 md:space-y-6">
                         {loadingIssues ? (
                             Array(2).fill(0).map((_, i) => (
                                 <FeedSkeleton key={i} />
@@ -250,7 +250,7 @@ export default function Home() {
                                     issues.length > 0
                                         ? issues.map((issue) => <IssueCard key={issue.id} issue={issue} />)
                                         : (
-                                            <div className="text-center py-12 text-gray-400">
+                                            <div className="text-center py-12 text-gray-400 px-4">
                                                 <p className="text-2xl mb-2">🏘️</p>
                                                 <p className="font-semibold text-gray-500">No issues reported nearby yet.</p>
                                                 <p className="text-xs mt-1">Be the first to report one in your area!</p>
@@ -258,13 +258,15 @@ export default function Home() {
                                         )
                                 )}
 
-                                <motion.button
-                                    {...tapScale.button}
-                                    onClick={() => router.push('/explore')}
-                                    className="w-full py-3.5 text-center text-blue-600 font-semibold bg-white border border-blue-100 rounded-full hover:bg-blue-50 transition-colors mt-4 shadow-xs cursor-pointer block"
-                                >
-                                    View All in Explore
-                                </motion.button>
+                                <div className="px-4 md:px-0 pb-6">
+                                    <motion.button
+                                        {...tapScale.button}
+                                        onClick={() => router.push('/explore')}
+                                        className="w-full py-3 text-center text-blue-600 font-semibold bg-white border border-blue-100 rounded-full hover:bg-blue-50 transition-colors mt-3 shadow-xs cursor-pointer block text-xs"
+                                    >
+                                        Explore All Community Reports →
+                                    </motion.button>
+                                </div>
                             </>
                         )}
                     </div>

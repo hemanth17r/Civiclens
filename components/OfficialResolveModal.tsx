@@ -7,6 +7,7 @@ import { supabase, getAuthenticatedSupabase } from '@/lib/supabase';
 import { officialResolveIssue, Issue } from '@/lib/issues';
 import { useAuth } from '@/context/AuthContext';
 import { backdropVariants, modalVariants, tapScale } from '@/lib/motion';
+import { compressImage } from '@/lib/imageCompression';
 
 interface Props {
     issue: Issue;
@@ -24,11 +25,12 @@ export default function OfficialResolveModal({ issue, isOpen, onClose, onResolve
     const [success, setSuccess] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
 
-    const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            setAfterFile(file);
-            setAfterPreview(URL.createObjectURL(file));
+            const compressed = await compressImage(file, { maxDimension: 1280, quality: 0.8 });
+            setAfterFile(compressed);
+            setAfterPreview(URL.createObjectURL(compressed));
         }
     };
 

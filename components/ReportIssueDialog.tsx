@@ -9,6 +9,7 @@ import { useToast } from '@/context/ToastContext';
 import { INDIAN_CITIES } from '@/data/cities';
 import { getAuthenticatedSupabase } from '@/lib/supabase';
 import { backdropVariants, modalVariants, tapScale } from '@/lib/motion';
+import { compressImage } from '@/lib/imageCompression';
 
 interface ReportIssueDialogProps {
     isOpen: boolean;
@@ -16,9 +17,6 @@ interface ReportIssueDialogProps {
 }
 
 const categories = ['Road', 'Waste', 'Water', 'Safety', 'Infrastructure', 'Environment', 'Other'];
-
-// Feature flag: set NEXT_PUBLIC_ENABLE_VIDEO_UPLOADS="true" in .env.local to immediately re-enable video uploads
-const ENABLE_VIDEO_UPLOADS = process.env.NEXT_PUBLIC_ENABLE_VIDEO_UPLOADS === 'true';
 
 const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }) => {
     const { user, userProfile } = useAuth();
@@ -133,26 +131,22 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
         setMediaPreviews([]);
     };
 
-    const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleMediaChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
         const selectedFile = e.target.files[0];
 
-        const isValid = selectedFile.type.startsWith('image/') || (ENABLE_VIDEO_UPLOADS && selectedFile.type.startsWith('video/'));
-        
-        if (!isValid) {
-            showToast(ENABLE_VIDEO_UPLOADS 
-                ? 'Only image and video files are supported.' 
-                : 'Only image files (JPG, PNG, WebP) are supported.',
-                "error"
-            );
+        if (!selectedFile.type.startsWith('image/')) {
+            showToast('Only image files (JPG, PNG, WebP) are supported.', 'error');
             return;
         }
 
         // Clean up previous preview URL to prevent memory leaks
         mediaPreviews.forEach(url => URL.revokeObjectURL(url));
 
-        const objectUrl = URL.createObjectURL(selectedFile);
-        setMediaFiles([selectedFile]);
+        // Pre-compress the image to max 1280px WebP at 80% quality
+        const compressedFile = await compressImage(selectedFile, { maxDimension: 1280, quality: 0.8 });
+        const objectUrl = URL.createObjectURL(compressedFile);
+        setMediaFiles([compressedFile]);
         setMediaPreviews([objectUrl]);
     };
 
@@ -202,17 +196,13 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                                 {/* Media Upload */}
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700">
-                                        {ENABLE_VIDEO_UPLOADS ? 'Photo / Video Evidence (1 file)' : 'Photo Evidence (1 photo)'}
+                                        Photo Evidence (1 photo)
                                     </label>
                                     <div className="flex gap-3 items-center">
                                         {/* Preview */}
                                         {mediaPreviews.map((previewUrl, idx) => (
                                             <div key={idx} className="relative w-28 h-28 flex-shrink-0 bg-gray-100 rounded-xl overflow-hidden border border-gray-200">
-                                                {mediaFiles[idx]?.type.startsWith('video/') ? (
-                                                    <video src={previewUrl} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
-                                                )}
+                                                <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
                                                 <button
                                                     type="button"
                                                     onClick={() => removeMedia(idx)}
@@ -229,13 +219,13 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                                             <div className="relative w-28 h-28 flex-shrink-0 border-2 border-dashed border-gray-300 hover:border-blue-400 bg-gray-50 hover:bg-blue-50 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:text-blue-500 transition-colors cursor-pointer group">
                                                 <input
                                                     type="file"
-                                                    accept={ENABLE_VIDEO_UPLOADS ? "image/*,video/*" : "image/*"}
+                                                    accept="image/*"
                                                     onChange={handleMediaChange}
                                                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                                 />
                                                 <Camera size={26} className="mb-1 group-hover:scale-110 transition-transform" />
                                                 <span className="text-[11px] font-semibold">
-                                                    {ENABLE_VIDEO_UPLOADS ? "Add Media" : "Add Photo"}
+                                                    Add Photo
                                                 </span>
                                             </div>
                                         )}

@@ -273,15 +273,15 @@ export default function ExplorePage() {
                     </div>
 
                     {/* Trending Content */}
-                    <div className="max-w-2xl mx-auto px-4 pb-4">
+                    <div className="max-w-2xl mx-auto px-0 md:px-4 pb-4">
                         {loadingTrending ? (
-                            <div className="space-y-5">
+                            <div className="space-y-1 md:space-y-5">
                                 {Array(3).fill(0).map((_, i) => (
                                     <FeedSkeleton key={i} />
                                 ))}
                             </div>
                         ) : trendingIssues.length > 0 ? (
-                            <div className="space-y-5">
+                            <div className="space-y-1 md:space-y-5">
                                 {trendingIssues.map((issue) => (
                                     <IssueCard key={issue.id} issue={issue} />
                                 ))}

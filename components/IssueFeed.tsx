@@ -50,7 +50,7 @@ export default function IssueFeed({ userId }: IssueFeedProps = {}) {
 
     if (initialLoad) {
         return (
-            <div className="max-w-md mx-auto pt-6">
+            <div className="max-w-md mx-auto px-0 md:px-4 pt-1 md:pt-6">
                 <FeedSkeleton />
                 <FeedSkeleton />
             </div>
@@ -72,7 +72,7 @@ export default function IssueFeed({ userId }: IssueFeedProps = {}) {
     }
 
     return (
-        <div className="max-w-md mx-auto pt-6 pb-20">
+        <div className="max-w-md mx-auto px-0 md:px-4 pt-1 md:pt-6 pb-20">
             {issues.map((issue) => (
                 <IssueCard key={issue.id} issue={issue} />
             ))}
