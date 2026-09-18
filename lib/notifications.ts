@@ -1,6 +1,6 @@
 import {
     collection, doc, addDoc, getDocs, getDoc, updateDoc, query, where, orderBy,
-    limit, serverTimestamp, Timestamp, writeBatch, increment
+    limit, serverTimestamp, Timestamp, writeBatch, increment, onSnapshot
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
@@ -114,6 +114,45 @@ export const getUnreadCount = async (uid: string): Promise<number> => {
     } catch (e: any) {
         console.warn('Error getting unread count:', e.message);
         return 0;
+    }
+};
+
+/**
+ * Real-time subscription to unread notification count.
+ * Uses onSnapshot bounded by limit(25) to avoid unbounded document reads.
+ * Returns an unsubscribe cleanup function.
+ */
+export const subscribeToUnreadCount = (
+    uid: string,
+    onUpdate: (count: number) => void
+): (() => void) => {
+    if (!uid) {
+        onUpdate(0);
+        return () => {};
+    }
+
+    try {
+        const q = query(
+            collection(db, 'notifications'),
+            where('targetUid', '==', uid),
+            where('read', '==', false),
+            limit(25)
+        );
+
+        const unsubscribe = onSnapshot(
+            q,
+            (snapshot) => {
+                onUpdate(snapshot.size);
+            },
+            (err) => {
+                console.warn('Error in unread count subscription:', err.message);
+            }
+        );
+
+        return unsubscribe;
+    } catch (err: any) {
+        console.warn('Failed to initialize unread count listener:', err?.message);
+        return () => {};
     }
 };
 

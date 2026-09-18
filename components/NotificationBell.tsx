@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, X, CheckCheck, Flame, MessageCircle, AlertTriangle, ShieldCheck, Clock } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { getNotifications, getUnreadCount, markAsRead, markAllRead, NotificationData } from '@/lib/notifications';
+import { getNotifications, subscribeToUnreadCount, markAsRead, markAllRead, NotificationData } from '@/lib/notifications';
 import { getIssueTimeMs } from '@/lib/issues';
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
@@ -41,30 +41,50 @@ export default function NotificationBell() {
     const [loading, setLoading] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Poll unread count every 30 seconds
-    const refreshUnread = useCallback(async () => {
-        if (!user) return;
-        // Skip when tab is hidden — avoids wasted Firestore reads in the background
-        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-        const count = await getUnreadCount(user.uid);
-        setUnread(count);
-    }, [user]);
-
+    // Real-time unread count subscription (event-driven, pauses when tab is hidden)
     useEffect(() => {
-        refreshUnread();
-        const interval = setInterval(refreshUnread, 30000);
+        if (!user) {
+            setUnread(0);
+            return;
+        }
 
-        // Pause polling when tab is hidden; fire immediately when it becomes visible again
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') refreshUnread();
+        let unsubscribe: (() => void) | null = null;
+
+        const startSubscription = () => {
+            if (!unsubscribe && user?.uid) {
+                unsubscribe = subscribeToUnreadCount(user.uid, (count) => {
+                    setUnread(count);
+                });
+            }
         };
+
+        const stopSubscription = () => {
+            if (unsubscribe) {
+                unsubscribe();
+                unsubscribe = null;
+            }
+        };
+
+        // Only listen when tab is visible to eliminate background data and battery drain
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                startSubscription();
+            } else {
+                stopSubscription();
+            }
+        };
+
+        if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+            startSubscription();
+        }
+
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
-            clearInterval(interval);
+            stopSubscription();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [refreshUnread]);
+    }, [user]);
 
     // Load notifications when dropdown opens
     useEffect(() => {

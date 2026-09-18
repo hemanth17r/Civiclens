@@ -27,7 +27,9 @@ import {
     getDoc,
     collectionGroup,
     Timestamp,
-    documentId
+    documentId,
+    writeBatch,
+    updateDoc
 } from "firebase/firestore";
 
 /**
@@ -637,21 +639,33 @@ export const addComment = async (
         }
     }
 
-    const docRef = await addDoc(collection(db, 'issues', issueId, 'comments'), commentData);
-
-    // Increment comment count on issue
+    let commentId: string | null = null;
     try {
+        // Atomic transaction: create comment doc and increment counter simultaneously
+        const commentRef = doc(collection(db, 'issues', issueId, 'comments'));
         await runTransaction(db, async (t) => {
+            t.set(commentRef, commentData);
             t.update(issueRef, { commentCount: increment(1) });
         });
-    } catch (e) { console.error('Failed to increment commentCount', e); }
+        commentId = commentRef.id;
+    } catch (e) {
+        console.warn('Failed transaction to add comment, falling back to resilient write:', e);
+        // Resilient fallback: write comment doc and attempt counter update independently
+        const docRef = await addDoc(collection(db, 'issues', issueId, 'comments'), commentData);
+        commentId = docRef.id;
+        try {
+            await updateDoc(issueRef, { commentCount: increment(1) });
+        } catch (counterErr) {
+            console.error('Failed to increment commentCount in fallback:', counterErr);
+        }
+    }
 
     // Award XP for commenting (fire-and-forget)
     awardXp(userId, 'COMMENT_ADDED').catch(() => { });
     // Track mission progress for comment action
     incrementMissionProgress(userId, '', 'comment').catch(() => { });
 
-    return docRef.id;
+    return commentId;
 };
 
 export const getComments = async (issueId: string): Promise<CommentData[]> => {
@@ -941,19 +955,18 @@ export const deleteUserCommentsForIssue = async (issueId: string, userId: string
             where('userId', '==', userId)
         );
         const snapshot = await withRetry(() => getDocs(q));
-        let deleted = 0;
-        for (const d of snapshot.docs) {
-            await deleteDoc(d.ref);
-            deleted++;
-        }
-        // Decrement commentCount on the issue
-        if (deleted > 0) {
-            const issueRef = doc(db, 'issues', issueId);
-            await runTransaction(db, async (t) => {
-                t.update(issueRef, { commentCount: increment(-deleted) });
-            });
-        }
-        return deleted;
+        if (snapshot.empty) return 0;
+
+        const count = snapshot.docs.length;
+        const issueRef = doc(db, 'issues', issueId);
+
+        // Single atomic batch commit: delete all comment documents and decrement issue counter together
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(d => batch.delete(d.ref));
+        batch.update(issueRef, { commentCount: increment(-count) });
+        await batch.commit();
+
+        return count;
     } catch (error) {
         console.error("Error deleting user comments:", error);
         return 0;
