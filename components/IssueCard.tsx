@@ -267,7 +267,7 @@ const IssueCard: React.FC<IssueCardProps> = ({ issue }) => {
                         whileTap={{ scale: 0.94 }}
                         onClick={handleStatusClick}
                         className={clsx(
-                            "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border shadow-2xs flex items-center gap-1 cursor-pointer transition-colors",
+                            "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border shadow-2xs flex items-center gap-1 cursor-pointer transition-colors shrink-0 whitespace-nowrap",
                             statusColor
                         )}
                         title="View issue details"

@@ -383,7 +383,7 @@ export default function ProfilePage() {
                         className="flex items-center group px-4 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
                     >
                         <MapPin size={16} className={clsx('mr-1.5 flex-shrink-0 transition-colors', city ? 'text-gray-900' : 'text-gray-500 group-hover:text-gray-700')} />
-                        <span className={clsx('text-sm font-semibold transition-colors', city ? 'text-gray-900' : 'text-gray-500 group-hover:text-gray-700')}>
+                        <span className={clsx('text-sm font-semibold transition-colors max-w-[130px] sm:max-w-xs truncate', city ? 'text-gray-900' : 'text-gray-500 group-hover:text-gray-700')}>
                             {city || 'Add Location'}
                         </span>
                     </button>
@@ -535,7 +535,7 @@ export default function ProfilePage() {
                     <motion.button
                         {...tapScale.pill}
                         onClick={() => setActiveTab('reports')}
-                        className={`relative z-10 flex-1 py-2.5 flex items-center justify-center gap-2 rounded-full text-xs font-bold transition-colors cursor-pointer ${
+                        className={`relative z-10 flex-1 py-2.5 flex items-center justify-center gap-1.5 sm:gap-2 rounded-full text-[11px] sm:text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
                             activeTab === 'reports' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'
                         }`}
                     >
@@ -552,7 +552,7 @@ export default function ProfilePage() {
                     <motion.button
                         {...tapScale.pill}
                         onClick={() => setActiveTab('activity')}
-                        className={`relative z-10 flex-1 py-2.5 flex items-center justify-center gap-2 rounded-full text-xs font-bold transition-colors cursor-pointer ${
+                        className={`relative z-10 flex-1 py-2.5 flex items-center justify-center gap-1.5 sm:gap-2 rounded-full text-[11px] sm:text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
                             activeTab === 'activity' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'
                         }`}
                     >

@@ -312,18 +312,29 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                         <ArrowLeft size={24} />
                     </button>
                 </div>
-                <div className="h-72 w-full bg-gray-100 animate-pulse" />
-                <div className="px-5 -mt-8 relative z-10 space-y-4">
-                    <div className="h-8 w-3/4 bg-gray-100 animate-pulse rounded-lg" />
-                    <div className="h-4 w-1/2 bg-gray-100 animate-pulse rounded-lg" />
-                    <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 space-y-5">
-                        <div className="h-5 w-40 bg-gray-100 animate-pulse rounded" />
-                        {[1, 2, 3, 4, 5].map(i => (
-                            <div key={i} className="flex items-center gap-4">
-                                <div className="w-4 h-4 bg-gray-200 rounded-full animate-pulse" />
-                                <div className="space-y-1.5">
-                                    <div className="h-3.5 w-24 bg-gray-100 animate-pulse rounded" />
-                                    <div className="h-2.5 w-16 bg-gray-100 animate-pulse rounded" />
+                <div className="h-72 w-full bg-gray-200 animate-pulse" />
+                <div className="px-3 sm:px-4 max-w-2xl mx-auto -mt-8 relative z-10 space-y-4">
+                    <div className="bg-white/90 backdrop-blur-xs p-3.5 rounded-2xl shadow-2xs space-y-2">
+                        <div className="h-7 w-3/4 bg-gray-200 animate-pulse rounded-lg" />
+                        <div className="flex gap-3">
+                            <div className="h-4 w-28 bg-gray-100 animate-pulse rounded" />
+                            <div className="h-4 w-20 bg-gray-100 animate-pulse rounded" />
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-2xs space-y-4 animate-pulse">
+                        <div className="flex items-center justify-between pb-3 border-b border-gray-50">
+                            <div className="space-y-1.5">
+                                <div className="h-4 w-32 bg-gray-200 rounded" />
+                                <div className="h-3 w-48 bg-gray-100 rounded" />
+                            </div>
+                            <div className="h-6 w-24 bg-gray-100 rounded-full" />
+                        </div>
+                        {[1, 2, 3, 4].map(i => (
+                            <div key={i} className="flex items-center gap-3 py-1.5">
+                                <div className="w-7 h-7 bg-gray-200 rounded-full shrink-0" />
+                                <div className="flex-1 space-y-1.5">
+                                    <div className="h-3.5 w-28 bg-gray-200 rounded" />
+                                    <div className="h-2.5 w-44 bg-gray-100 rounded" />
                                 </div>
                             </div>
                         ))}
@@ -400,42 +411,42 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                 );
             })()}
 
-            <div className="px-5 -mt-8 relative z-10">
+            <div className="px-3 sm:px-4 max-w-2xl mx-auto -mt-8 relative z-10">
                 <div className="flex items-start justify-between gap-4 mb-2">
-                    <h1 className="text-3xl font-bold text-gray-900 leading-tight">{issue.title}</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 leading-tight">{issue.title}</h1>
                     {(isAdmin || (user && user.uid === issue.userId)) && (
                         <motion.button
                             {...tapScale.button}
                             onClick={() => setShowDeleteModal(true)}
-                            className="bg-red-50 text-red-600 hover:bg-red-100 flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-colors flex items-center gap-1.5 mt-1 cursor-pointer"
+                            className="bg-red-50 text-red-600 hover:bg-red-100 flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors flex items-center gap-1.5 mt-1 cursor-pointer"
                         >
-                            <Trash2 size={15} /> Delete
+                            <Trash2 size={14} /> Delete
                         </motion.button>
                     )}
                 </div>
-                <div className="flex items-center gap-4 text-gray-500 text-sm mb-6">
+                <div className="flex items-center gap-3 sm:gap-4 text-gray-500 text-xs sm:text-sm mb-4">
                     <span className="flex items-center gap-1">
-                        <MapPin size={16} />
+                        <MapPin size={15} />
                         {issue.location || issue.cityName || 'Unknown'}
                     </span>
                     <span className="flex items-center gap-1">
-                        <Calendar size={16} />
+                        <Calendar size={15} />
                         {timeAgo}
                     </span>
                 </div>
 
                 {/* ── ISSUE LIFECYCLE SYSTEM ────────────────────────────────── */}
-                <div className="bg-gray-50 rounded-3xl p-6 mb-6 border border-gray-100 relative">
+                <div className="bg-white rounded-2xl md:rounded-3xl p-3.5 sm:p-5 mb-6 border border-gray-100 shadow-2xs relative">
                     {/* Header Row */}
-                    <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center justify-between mb-4 sm:mb-6 pb-2 border-b border-gray-50">
                         <div>
-                            <h3 className="font-bold text-gray-900 text-lg">Issue Lifecycle</h3>
-                            <p className="text-xs text-gray-400 mt-0.5">Each issue moves through defined stages</p>
+                            <h3 className="font-bold text-gray-900 text-base sm:text-lg">Issue Lifecycle</h3>
+                            <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5">Community-verified progression</p>
                         </div>
                         <div className="relative" ref={verifiedInfoRef}>
                             <button
                                 onClick={() => setShowVerifiedInfo(v => !v)}
-                                className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full hover:opacity-90 transition-colors cursor-pointer"
+                                className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full hover:opacity-90 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
                                 style={{
                                     backgroundColor: currentStageIdx >= 2 ? '#ECFDF5' : LIFECYCLE_STAGES[currentStageIdx]?.bgColor || '#F3F4F6',
                                     color: currentStageIdx >= 2 ? '#059669' : LIFECYCLE_STAGES[currentStageIdx]?.color || '#374151',
@@ -443,7 +454,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                                 aria-expanded={showVerifiedInfo}
                                 aria-label="Learn about issue lifecycle status"
                             >
-                                <ShieldAlert size={14} className="mb-0.5" /> {currentStageIdx >= 2 ? 'Community Verified' : LIFECYCLE_STAGES[currentStageIdx]?.label || 'Reported'}
+                                <ShieldAlert size={13} className="mb-0.5" /> {currentStageIdx >= 2 ? 'Community Verified' : LIFECYCLE_STAGES[currentStageIdx]?.label || 'Reported'}
                             </button>
                             {showVerifiedInfo && (
                                 <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-2xl shadow-xl p-4 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -460,7 +471,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                     </div>
 
                     {/* ── STAGES TIMELINE ─────────────────────────────────── */}
-                    <div className="relative ml-1">
+                    <div className="relative ml-0.5 sm:ml-1">
                         {LIFECYCLE_STAGES.map((stage, idx) => {
                             const isDone = idx <= currentStageIdx;
                             const isCurrent = idx === currentStageIdx;
@@ -488,7 +499,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                                     {/* Connector line */}
                                     {!isLast && (
                                         <div
-                                            className="absolute left-[15px] top-[36px] w-0.5 h-[calc(100%-4px)]"
+                                            className="absolute left-[14px] top-[32px] w-0.5 h-[calc(100%-4px)]"
                                             style={{
                                                 backgroundColor: isDone && idx < currentStageIdx ? stage.color : '#E5E7EB',
                                             }}
@@ -498,9 +509,9 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                                     {/* Stage Row */}
                                     <div
                                         className={clsx(
-                                            "flex items-start gap-4 py-3 px-3 rounded-2xl transition-all",
-                                            isCurrent && "bg-white shadow-sm border",
-                                            isQuickVoteExpanded && !isCurrent && "bg-white/60 shadow-sm border border-gray-100",
+                                            "flex items-start gap-2.5 sm:gap-3.5 py-2 px-1.5 sm:px-3 rounded-xl sm:rounded-2xl transition-all",
+                                            isCurrent && "bg-white shadow-xs border",
+                                            isQuickVoteExpanded && !isCurrent && "bg-gray-50/70 shadow-xs border border-gray-100",
                                             !isDone && !isNext && !isQuickVoteExpanded && "opacity-50",
                                         )}
                                         style={isCurrent ? { borderColor: stage.borderColor + '40' } : undefined}
@@ -508,8 +519,8 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                                         {/* Circle Indicator */}
                                         <div
                                             className={clsx(
-                                                "w-[30px] h-[30px] rounded-full flex items-center justify-center flex-shrink-0 transition-all",
-                                                isCurrent && "ring-4 ring-offset-1",
+                                                "w-7 h-7 sm:w-[30px] sm:h-[30px] rounded-full flex items-center justify-center flex-shrink-0 transition-all",
+                                                isCurrent && "ring-3 sm:ring-4 ring-offset-1",
                                             )}
                                             style={{
                                                 backgroundColor: isDone ? stage.color : '#F3F4F6',
@@ -695,7 +706,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                             <div className="flex items-center gap-2 mb-4">
                                 <Clock size={16} className="text-gray-400" />
                                 <h3 className="font-bold text-gray-900 text-sm">Public Timeline</h3>
-                                <span className="text-[10px] text-gray-400 font-medium">Transparency builds trust</span>
+                                <span className="text-[10px] text-gray-400 font-medium truncate hidden sm:inline">Transparency builds trust</span>
                             </div>
                             <div className="space-y-3">
                                 {logEntries.map((entry, idx) => (

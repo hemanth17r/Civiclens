@@ -178,7 +178,7 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                         initial="initial"
                         animate="animate"
                         exit="exit"
-                        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-full max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col"
+                        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-[calc(100%-1.5rem)] sm:w-full max-w-lg bg-white rounded-2xl sm:rounded-3xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col"
                     >
                         <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
                             <h2 className="text-xl font-bold text-gray-900">Report an Issue</h2>
@@ -191,7 +191,7 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                             </motion.button>
                         </div>
 
-                        <div className="overflow-y-auto flex-1 p-6">
+                        <div className="overflow-y-auto flex-1 p-4 sm:p-6">
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 {/* Media Upload */}
                                 <div className="space-y-2">
@@ -252,7 +252,7 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
                                                 key={c}
                                                 type="button"
                                                 onClick={() => setCategory(c)}
-                                                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${category === c
+                                                className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-medium transition-all ${category === c
                                                     ? 'bg-blue-600 text-white shadow-sm shadow-blue-200'
                                                     : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                                                     }`}

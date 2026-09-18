@@ -333,7 +333,7 @@ export default function ExplorePage() {
                             )}
                         >
                             <MapPin size={20} />
-                            <span className="text-[10px] font-bold uppercase tracking-tight">
+                            <span className="text-[10px] font-bold uppercase tracking-tight truncate max-w-[80px] sm:max-w-none">
                                 {matchedCity ? matchedCity : 'Places'}
                             </span>
                         </button>

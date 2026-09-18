@@ -241,7 +241,7 @@ export default function LeaderboardPage() {
                                                 )}
                                             </div>
                                             <div className="flex items-center gap-2 mt-0.5">
-                                                <span className="text-xs text-gray-400">{entry.handle}</span>
+                                                <span className="text-xs text-gray-400 truncate">{entry.handle}</span>
                                                 {entry.currentStreak > 0 && (
                                                     <span className="flex items-center gap-0.5 text-[10px] text-orange-500 font-bold">
                                                         <Flame size={10} className="fill-orange-400" />{entry.currentStreak}

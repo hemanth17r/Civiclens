@@ -239,7 +239,7 @@ export default function CityInsightsPage() {
                                         <span className="flex items-center gap-1 text-[10px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
                                             <Flame size={10} /> {issue.votes || 0}
                                         </span>
-                                        <span className="flex items-center gap-1 text-[10px] font-semibold text-gray-500">
+                                        <span className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 shrink-0 whitespace-nowrap">
                                             <Clock size={10} /> {type === 'resolved' && resolvedAge ? resolvedAge : age}
                                         </span>
                                     </div>
@@ -294,36 +294,36 @@ export default function CityInsightsPage() {
                     </p>
 
                     {/* Civic Pulse High-Level KPIs */}
-                    <div className="grid grid-cols-3 gap-3 mt-6">
-                        <div className="bg-white rounded-xl border border-slate-200/80 p-3 shadow-xs flex flex-col justify-between">
+                    <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-5 sm:mt-6">
+                        <div className="bg-white rounded-xl border border-slate-200/80 p-2.5 sm:p-3 shadow-xs flex flex-col justify-between">
                             <div className="flex items-center justify-between text-slate-500 mb-1">
-                                <span className="text-[11px] font-bold uppercase tracking-wider">Active</span>
-                                <Clock size={13} className="text-blue-500" />
+                                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">Active</span>
+                                <Clock size={13} className="text-blue-500 shrink-0" />
                             </div>
-                            <p className="text-xl sm:text-2xl font-black text-slate-900">
+                            <p className="text-lg sm:text-2xl font-black text-slate-900">
                                 {loading ? '—' : (pulseStats?.activeCount ?? 0)}
                             </p>
-                            <span className="text-[10px] text-slate-400 font-medium mt-0.5">Under action</span>
+                            <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium mt-0.5 truncate">Under action</span>
                         </div>
-                        <div className="bg-white rounded-xl border border-slate-200/80 p-3 shadow-xs flex flex-col justify-between">
+                        <div className="bg-white rounded-xl border border-slate-200/80 p-2.5 sm:p-3 shadow-xs flex flex-col justify-between">
                             <div className="flex items-center justify-between text-slate-500 mb-1">
-                                <span className="text-[11px] font-bold uppercase tracking-wider">Resolved</span>
-                                <CheckCircle size={13} className="text-emerald-500" />
+                                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">Resolved</span>
+                                <CheckCircle size={13} className="text-emerald-500 shrink-0" />
                             </div>
-                            <p className="text-xl sm:text-2xl font-black text-slate-900">
+                            <p className="text-lg sm:text-2xl font-black text-slate-900">
                                 {loading ? '—' : (pulseStats?.resolvedCount ?? 0)}
                             </p>
-                            <span className="text-[10px] text-slate-400 font-medium mt-0.5">Fixed & verified</span>
+                            <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium mt-0.5 truncate">Fixed & verified</span>
                         </div>
-                        <div className="bg-white rounded-xl border border-slate-200/80 p-3 shadow-xs flex flex-col justify-between">
+                        <div className="bg-white rounded-xl border border-slate-200/80 p-2.5 sm:p-3 shadow-xs flex flex-col justify-between">
                             <div className="flex items-center justify-between text-slate-500 mb-1">
-                                <span className="text-[11px] font-bold uppercase tracking-wider">Velocity</span>
-                                <TrendingUp size={13} className="text-purple-500" />
+                                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">Velocity</span>
+                                <TrendingUp size={13} className="text-purple-500 shrink-0" />
                             </div>
-                            <p className="text-xl sm:text-2xl font-black text-slate-900">
+                            <p className="text-lg sm:text-2xl font-black text-slate-900">
                                 {loading ? '—' : `${pulseStats?.resolutionRate ?? 0}%`}
                             </p>
-                            <span className="text-[10px] text-slate-400 font-medium mt-0.5">Resolution rate</span>
+                            <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium mt-0.5 truncate">Resolution rate</span>
                         </div>
                     </div>
                 </div>

@@ -51,41 +51,58 @@ export default function StageVoteCard({
     const hasVote = userVote === 'yes' || userVote === 'no';
 
     return (
-        <div className="mt-4 p-4 rounded-xl border border-gray-100 bg-white/50 space-y-4">
-            {/* Question + signal */}
-            <div className="flex items-center justify-between gap-4">
-                <span className="text-sm font-semibold text-gray-800">{getPrompt()}</span>
+        <div className="mt-2.5 p-3 sm:p-4 rounded-xl border border-gray-100 bg-gray-50/70 space-y-3">
+            {/* Question + signal pill */}
+            <div className="flex items-start justify-between gap-2.5">
+                <span className="text-sm font-semibold text-gray-900 leading-snug">
+                    {getPrompt()}
+                </span>
                 {totalWeight > 0 && (
-                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                        Signal: {percentageYes}% Yes
+                    <span className={clsx(
+                        "shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-tight whitespace-nowrap border",
+                        percentageYes >= 60
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : percentageYes <= 40
+                            ? "bg-rose-50 text-rose-700 border-rose-200"
+                            : "bg-amber-50 text-amber-700 border-amber-200"
+                    )}>
+                        {percentageYes}% Yes
                     </span>
                 )}
             </div>
 
             {/* Confidence Bar */}
-            <div className="relative h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                <motion.div
-                    className={clsx(
-                        'h-full',
-                        percentageYes > 60
-                            ? 'bg-emerald-500'
-                            : percentageYes < 40
-                            ? 'bg-rose-500'
-                            : 'bg-amber-400'
-                    )}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${percentageYes}%` }}
-                    transition={springSnappy}
-                />
+            <div className="space-y-1">
+                <div className="relative h-2 w-full bg-gray-200/70 rounded-full overflow-hidden">
+                    <motion.div
+                        className={clsx(
+                            'h-full rounded-full',
+                            percentageYes >= 60
+                                ? 'bg-emerald-500'
+                                : percentageYes <= 40
+                                ? 'bg-rose-500'
+                                : 'bg-amber-400'
+                        )}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${percentageYes}%` }}
+                        transition={springSnappy}
+                    />
+                </div>
+                {totalWeight > 0 && (
+                    <div className="flex items-center justify-between text-[10px] text-gray-400 font-medium">
+                        <span>Community Confidence</span>
+                        <span>{totalWeight} {totalWeight === 1 ? 'vote' : 'votes'}</span>
+                    </div>
+                )}
             </div>
 
             {/* Vote Buttons or Author Notice */}
             {isAuthor ? (
-                <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-center text-xs text-gray-500 font-medium">
+                <div className="p-2.5 bg-white border border-gray-200 rounded-xl text-center text-xs text-gray-500 font-medium">
                     As the author of this report, you cannot vote on its community verification.
                 </div>
             ) : (
-                <div className="relative flex rounded-xl overflow-hidden border border-gray-200 bg-gray-50 p-1">
+                <div className="relative flex rounded-xl overflow-hidden border border-gray-200 bg-white p-1 shadow-2xs">
                     {/* Sliding pill indicator — only visible when a vote is cast */}
                     {hasVote && (
                         <motion.div
@@ -93,8 +110,8 @@ export default function StageVoteCard({
                             className={clsx(
                                 'absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg pointer-events-none z-0',
                                 userVote === 'yes'
-                                    ? 'left-1 bg-emerald-500 shadow-sm shadow-emerald-500/30'
-                                    : 'left-[calc(50%+2px)] bg-rose-500 shadow-sm shadow-rose-500/30'
+                                    ? 'left-1 bg-emerald-500 shadow-xs shadow-emerald-500/30'
+                                    : 'left-[calc(50%+2px)] bg-rose-500 shadow-xs shadow-rose-500/30'
                             )}
                             transition={springJelly}
                         />
@@ -106,11 +123,11 @@ export default function StageVoteCard({
                         onClick={() => !isVoting && onVote('yes')}
                         disabled={isVoting}
                         className={clsx(
-                            'relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors duration-200 cursor-pointer rounded-lg',
+                            'relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-bold transition-colors duration-200 cursor-pointer rounded-lg',
                             isVoting && 'cursor-not-allowed opacity-60',
                             userVote === 'yes'
                                 ? 'text-white'
-                                : 'text-gray-500 hover:text-emerald-600'
+                                : 'text-gray-600 hover:text-emerald-600'
                         )}
                         aria-pressed={userVote === 'yes'}
                         aria-label="Vote Yes"
@@ -129,11 +146,11 @@ export default function StageVoteCard({
                         onClick={() => !isVoting && onVote('no')}
                         disabled={isVoting}
                         className={clsx(
-                            'relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors duration-200 cursor-pointer rounded-lg',
+                            'relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-bold transition-colors duration-200 cursor-pointer rounded-lg',
                             isVoting && 'cursor-not-allowed opacity-60',
                             userVote === 'no'
                                 ? 'text-white'
-                                : 'text-gray-500 hover:text-rose-600'
+                                : 'text-gray-600 hover:text-rose-600'
                         )}
                         aria-pressed={userVote === 'no'}
                         aria-label="Vote No"

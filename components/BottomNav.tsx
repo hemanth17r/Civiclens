@@ -52,7 +52,7 @@ function BottomNav({ onReportClick }: BottomNavProps) {
                 <motion.div whileTap={{ scale: 0.92 }} transition={springSnappy}>
                     <Link href="/scorecard" prefetch={false} className={clsx("flex flex-col items-center w-16 gap-1 transition-colors", pathname === '/scorecard' ? "text-blue-600" : "text-gray-400")}>
                         <Map size={24} strokeWidth={pathname === '/scorecard' ? 2.5 : 2} />
-                        <span className="font-medium">City Insights</span>
+                        <span className="font-medium whitespace-nowrap">Insights</span>
                     </Link>
                 </motion.div>
 

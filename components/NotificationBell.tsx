@@ -163,7 +163,7 @@ export default function NotificationBell() {
                         initial="initial"
                         animate="animate"
                         exit="exit"
-                        className="absolute right-0 top-full mt-2 w-80 md:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-[100] overflow-hidden"
+                        className="absolute right-[-8px] sm:right-0 top-full mt-2 w-[calc(100vw-24px)] max-w-sm sm:w-80 md:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-[100] overflow-hidden"
                     >
                         {/* Header */}
                         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
