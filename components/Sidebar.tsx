@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Compass, Map, Bell, User, LayoutDashboard } from 'lucide-react';
+import { Home, Compass, Map, Bell, User, LayoutDashboard } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
@@ -20,6 +20,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   const isVisualOpen = isOpen;
 
   const navItems = [
+    { name: 'Home', href: '/', icon: Home },
     { name: 'Explore', href: '/explore', icon: Compass },
     { name: 'City Insights', href: '/scorecard', icon: Map },
     { name: 'Notifications', href: '/notifications', icon: Bell },

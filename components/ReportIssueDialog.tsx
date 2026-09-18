@@ -5,6 +5,7 @@ import { X, Loader2, MapPin, Camera, Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createIssue } from '@/lib/issues';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import { INDIAN_CITIES } from '@/data/cities';
 import { getAuthenticatedSupabase } from '@/lib/supabase';
 import { backdropVariants, modalVariants, tapScale } from '@/lib/motion';
@@ -21,6 +22,7 @@ const ENABLE_VIDEO_UPLOADS = process.env.NEXT_PUBLIC_ENABLE_VIDEO_UPLOADS === 't
 
 const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }) => {
     const { user, userProfile } = useAuth();
+    const { showToast } = useToast();
     const [loading, setLoading] = useState(false);
     const [title, setTitle] = useState('');
     const [category, setCategory] = useState('');
@@ -46,13 +48,13 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
         e.preventDefault();
 
         if (!title || !category || !selectedCityName) {
-            alert("Please fill in all required fields, including City.");
+            showToast("Please fill in all required fields, including City.", "error");
             return;
         }
 
         // Require authentication — guest userId is not allowed
         if (!user) {
-            alert("You must be signed in to submit a report.");
+            showToast("You must be signed in to submit a report.", "error");
             return;
         }
 
@@ -106,6 +108,7 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
             if (cityData) issueData.cityCoordinates = { lat: cityData.lat, lng: cityData.lng };
 
             await createIssue(issueData);
+            showToast("Report submitted successfully!", "success");
 
             // First reset the form state, THEN close the dialog.
             resetForm();
@@ -113,7 +116,7 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
 
         } catch (error: any) {
             console.error('Failed to submit issue', error);
-            alert(`Failed to submit: ${error.message || 'Unknown error'}`);
+            showToast(`Failed to submit: ${error.message || 'Unknown error'}`, "error");
         } finally {
             setLoading(false);
         }
@@ -137,9 +140,10 @@ const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ isOpen, onClose }
         const isValid = selectedFile.type.startsWith('image/') || (ENABLE_VIDEO_UPLOADS && selectedFile.type.startsWith('video/'));
         
         if (!isValid) {
-            alert(ENABLE_VIDEO_UPLOADS 
+            showToast(ENABLE_VIDEO_UPLOADS 
                 ? 'Only image and video files are supported.' 
-                : 'Only image files (JPG, PNG, WebP) are supported.'
+                : 'Only image files (JPG, PNG, WebP) are supported.',
+                "error"
             );
             return;
         }

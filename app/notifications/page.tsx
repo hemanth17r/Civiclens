@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Bell, Flame, MessageCircle, CheckCircle, AlertTriangle, ShieldCheck, Clock, CheckCheck } from 'lucide-react';
+import { Bell, Flame, MessageCircle, CheckCircle, AlertTriangle, ShieldCheck, Clock, CheckCheck, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getNotifications, markAsRead, markAllRead, NotificationData } from '@/lib/notifications';
 import { getIssueTimeMs } from '@/lib/issues';
@@ -41,6 +41,9 @@ export default function NotificationsPage() {
             await markAsRead(notif.id);
             setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
         }
+        if (notif.issueId) {
+            router.push(`/issue/${notif.issueId}`);
+        }
     };
 
     const formatTime = (ts: any) => {
@@ -54,20 +57,27 @@ export default function NotificationsPage() {
     };
 
     const getIcon = (type: string, isUrgent: boolean) => {
-        if (isUrgent) return <AlertTriangle size={20} className="text-red-600" fill="currentColor" />;
+        if (isUrgent) return <AlertTriangle size={20} className="text-red-600" />;
         switch (type) {
-            case 'status_update': return <ShieldCheck size={20} className="text-green-600" />;
-            case 'hype': return <Flame size={20} className="text-orange-500" fill="currentColor" />;
+            case 'status_update':
+            case 'author_status':
+            case 'issue_approved': return <ShieldCheck size={20} className="text-green-600" />;
+            case 'issue_rejected': return <X size={20} className="text-red-600" />;
+            case 'hype':
+            case 'author_milestone': return <Flame size={20} className="text-orange-500" />;
             case 'comment': return <MessageCircle size={20} className="text-blue-500" />;
             default: return <Bell size={20} className="text-gray-500" />;
         }
     };
 
     const getIconBg = (type: string, isUrgent: boolean) => {
-        if (isUrgent) return 'bg-red-100';
+        if (isUrgent || type === 'issue_rejected') return 'bg-red-100';
         switch (type) {
-            case 'status_update': return 'bg-green-100';
-            case 'hype': return 'bg-orange-100';
+            case 'status_update':
+            case 'author_status':
+            case 'issue_approved': return 'bg-green-100';
+            case 'hype':
+            case 'author_milestone': return 'bg-orange-100';
             case 'comment': return 'bg-blue-100';
             default: return 'bg-gray-100';
         }

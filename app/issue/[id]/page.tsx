@@ -6,6 +6,7 @@ import { ArrowLeft, MapPin, Calendar, Edit2, ShieldAlert, AlertCircle, Info, Use
 import { clsx } from 'clsx';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import StageVoteCard from '@/components/StageVoteCard';
 import AuthModule from '@/components/AuthModule';
 import { getIssueById, getUserStatusVotes, Issue, IssueStatusState, normalizeStatus, voteOnStatus, STATUS_DB_KEYS, getIssueTimeMs } from '@/lib/issues';
@@ -96,6 +97,7 @@ function getStageIndex(status: string): number {
 export default function IssueDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
     const { user, isAdmin } = useAuth();
+    const { showToast } = useToast();
     const [votingStageKey, setVotingStageKey] = useState<string | null>(null);
     const [quickVoteOpen, setQuickVoteOpen] = useState<string | null>(null);
     const [showVerifiedInfo, setShowVerifiedInfo] = useState(false);
@@ -191,7 +193,7 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
             router.push('/');
         } catch (error) {
             console.error('Error deleting issue:', error);
-            alert('Failed to delete issue.');
+            showToast('Failed to delete issue.', 'error');
         } finally {
             setIsDeleting(false);
             setShowDeleteModal(false);
@@ -288,13 +290,13 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
                 // Rollback on functional error
                 setUserVotes(previousUserVotes);
                 setIssue(previousIssue);
-                alert(res.error || 'Failed to record vote. Changes reverted.');
+                showToast(res.error || 'Failed to record vote. Changes reverted.', 'error');
             }
         } catch (e: any) {
             // Rollback on exception
             setUserVotes(previousUserVotes);
             setIssue(previousIssue);
-            alert(e.message || 'Error recording vote. Changes reverted.');
+            showToast(e.message || 'Error recording vote. Changes reverted.', 'error');
         }
     };
 
@@ -382,16 +384,21 @@ export default function IssueDetailPage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* Hero Image */}
-            <div className="h-72 w-full relative bg-gray-100">
-                {issue.imageUrl ? (
-                    <img src={issue.imageUrl} alt={issue.title} className="w-full h-full object-cover" />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-                        <MapPin size={48} className="text-gray-300" />
+            {(() => {
+                const heroImage = issue.imageUrl || (issue.mediaUrls && issue.mediaUrls.length > 0 ? issue.mediaUrls[0] : null);
+                return (
+                    <div className="h-72 w-full relative bg-gray-100">
+                        {heroImage ? (
+                            <img src={heroImage} alt={issue.title} className="w-full h-full object-cover" />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
+                                <MapPin size={48} className="text-gray-300" />
+                            </div>
+                        )}
+                        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white to-transparent" />
                     </div>
-                )}
-                <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white to-transparent" />
-            </div>
+                );
+            })()}
 
             <div className="px-5 -mt-8 relative z-10">
                 <div className="flex items-start justify-between gap-4 mb-2">

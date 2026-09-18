@@ -13,13 +13,15 @@ const AuthModule = dynamic(() => import('./AuthModule'), { ssr: false });
 const OnboardingModal = dynamic(() => import('./OnboardingModal'), { ssr: false });
 const PWAInstallPrompt = dynamic(() => import('./PWAInstallPrompt'), { ssr: false });
 import NotificationBell from './NotificationBell';
+import { motion } from 'framer-motion';
+import { tapScale } from '@/lib/motion';
 
 interface ShellProps {
     children: React.ReactNode;
 }
 
 export default function Shell({ children }: ShellProps) {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -66,9 +68,21 @@ export default function Shell({ children }: ShellProps) {
             </div>
 
             {/* Mobile Top Bar */}
-            <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-white h-12 px-4 flex items-center justify-between">
+            <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-white h-12 px-4 flex items-center justify-between border-b border-gray-100">
                 <span className="text-lg font-semibold text-gray-900">CivicLens</span>
-                <NotificationBell />
+                <div className="flex items-center gap-2">
+                    {user ? (
+                        <NotificationBell />
+                    ) : !authLoading ? (
+                        <motion.button
+                            {...tapScale.button}
+                            onClick={() => setIsAuthModalOpen(true)}
+                            className="text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-full transition-colors cursor-pointer"
+                        >
+                            Sign In
+                        </motion.button>
+                    ) : null}
+                </div>
             </div>
 
             {/* Main Content Area */}

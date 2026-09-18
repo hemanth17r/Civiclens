@@ -8,6 +8,7 @@ import { useToast } from '@/context/ToastContext';
 import { getFeedIssues, Issue } from '@/lib/issues';
 import { setPendingIntent } from '@/lib/authIntents';
 import IssueCard from '@/components/IssueCard';
+import FeedSkeleton from '@/components/FeedSkeleton';
 const ReportIssueDialog = dynamic(() => import('@/components/ReportIssueDialog'), { ssr: false });
 const AuthModule = dynamic(() => import('@/components/AuthModule'), { ssr: false });
 import { useRouter } from 'next/navigation';
@@ -240,16 +241,7 @@ export default function Home() {
                     <div className="space-y-6">
                         {loadingIssues ? (
                             Array(2).fill(0).map((_, i) => (
-                                <div key={i} className="bg-white rounded-xl h-[400px] border border-gray-100 p-4 space-y-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-gray-100 animate-pulse" />
-                                        <div className="space-y-2">
-                                            <div className="w-24 h-3 bg-gray-100 animate-pulse rounded" />
-                                            <div className="w-16 h-2 bg-gray-100 animate-pulse rounded" />
-                                        </div>
-                                    </div>
-                                    <div className="w-full h-64 bg-gray-100 animate-pulse rounded-lg" />
-                                </div>
+                                <FeedSkeleton key={i} />
                             ))
                         ) : (
                             <>

@@ -10,6 +10,8 @@ import { useRouter } from 'next/navigation';
 import { INDIAN_CITIES } from '@/data/cities';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
+import { tapScale } from '@/lib/motion';
 
 // Module-level Map for O(1) city-name lookup (avoids 190-entry linear scan per search submit)
 const CITY_NAME_MAP = new Map(INDIAN_CITIES.map(c => [c.name.toLowerCase(), c]));
@@ -246,18 +248,19 @@ export default function ExplorePage() {
                     <div className="bg-white py-3 overflow-x-auto no-scrollbar">
                         <div className="flex px-4 gap-2 min-w-max">
                             {categories.map((cat) => (
-                                <button
+                                <motion.button
                                     key={cat}
+                                    {...tapScale.pill}
                                     onClick={() => setSelectedCategory(cat)}
                                     className={clsx(
-                                        "px-4 py-1.5 rounded-full text-sm font-medium transition-colors border",
+                                        "px-4 py-1.5 rounded-full text-sm font-medium transition-colors border cursor-pointer",
                                         selectedCategory === cat
-                                            ? "bg-gray-900 text-white border-gray-900"
+                                            ? "bg-gray-900 text-white border-gray-900 shadow-xs"
                                             : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
                                     )}
                                 >
                                     {cat}
-                                </button>
+                                </motion.button>
                             ))}
                         </div>
                     </div>

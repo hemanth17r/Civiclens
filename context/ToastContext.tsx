@@ -33,6 +33,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         setToasts((prev) => prev.filter((t) => t.id !== id));
     };
 
+    React.useEffect(() => {
+        const handleCustomToast = (e: Event) => {
+            const customEvent = e as CustomEvent<{ message: string; type?: ToastType }>;
+            if (customEvent.detail?.message) {
+                showToast(customEvent.detail.message, customEvent.detail.type || 'info');
+            }
+        };
+        window.addEventListener('civiclens:toast', handleCustomToast);
+        return () => window.removeEventListener('civiclens:toast', handleCustomToast);
+    }, [showToast]);
+
     return (
         <ToastContext.Provider value={{ showToast }}>
             {children}

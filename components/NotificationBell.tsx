@@ -8,6 +8,7 @@ import { getNotifications, getUnreadCount, markAsRead, markAllRead, Notification
 import { getIssueTimeMs } from '@/lib/issues';
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { dropdownVariants, tapScale } from '@/lib/motion';
 
 // ── Module-level pure helpers — extracted to avoid recreating closures every render ──
@@ -33,6 +34,7 @@ function getNotifBg(notif: NotificationData) {
 
 export default function NotificationBell() {
     const { user } = useAuth();
+    const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
     const [notifications, setNotifications] = useState<NotificationData[]>([]);
     const [unread, setUnread] = useState(0);
@@ -96,6 +98,10 @@ export default function NotificationBell() {
             await markAsRead(notif.id);
             setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
             setUnread(prev => Math.max(0, prev - 1));
+        }
+        if (notif.issueId) {
+            setIsOpen(false);
+            router.push(`/issue/${notif.issueId}`);
         }
     };
 

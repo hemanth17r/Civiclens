@@ -116,11 +116,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     .then(() => {
                         window.localStorage.removeItem('emailForSignIn');
                         window.history.replaceState(null, '', window.location.pathname);
-                        alert("Successfully signed in!");
+                        if (typeof window !== 'undefined') {
+                            window.dispatchEvent(new CustomEvent('civiclens:toast', { detail: { message: "Successfully signed in!", type: "success" } }));
+                        }
                     })
                     .catch((error) => {
                         console.warn('Error signing in with magic link:', error);
-                        alert("Failed to sign in with magic link. It may have expired or already been used.");
+                        if (typeof window !== 'undefined') {
+                            window.dispatchEvent(new CustomEvent('civiclens:toast', { detail: { message: "Failed to sign in with magic link. It may have expired or already been used.", type: "error" } }));
+                        }
                     });
             } else {
                 // If they cancelled the prompt, reset the ref so they could try again if they refresh
@@ -163,7 +167,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         setUserProfile(null);
                         setProfileChecked(true);
                         setLoading(false);
-                        alert("Your account has been suspended.");
+                        if (typeof window !== 'undefined') {
+                            window.dispatchEvent(new CustomEvent('civiclens:toast', { detail: { message: "Your account has been suspended.", type: "error" } }));
+                        }
                         return;
                     }
                     setUserProfile(profileData);

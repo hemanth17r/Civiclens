@@ -14,8 +14,8 @@ const FeedSkeleton = () => {
                 </div>
             </div>
 
-            {/* Image Skeleton (4:5 Ratio) */}
-            <div className="aspect-[4/5] w-full bg-gray-200"></div>
+            {/* Image Skeleton (1:1 Ratio - matching IssueCard) */}
+            <div className="aspect-square w-full bg-gray-200"></div>
 
             {/* Actions Bar Skeleton */}
             <div className="p-3 flex items-center justify-between">
