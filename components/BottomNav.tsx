@@ -28,7 +28,7 @@ function BottomNav({ onReportClick }: BottomNavProps) {
 
                 {/* 2. Explore */}
                 <motion.div whileTap={{ scale: 0.92 }} transition={springSnappy}>
-                    <Link href="/explore" className={clsx("flex flex-col items-center w-16 gap-1 transition-colors", pathname === '/explore' ? "text-blue-600" : "text-gray-400")}>
+                    <Link href="/explore" prefetch={false} className={clsx("flex flex-col items-center w-16 gap-1 transition-colors", pathname === '/explore' ? "text-blue-600" : "text-gray-400")}>
                         <Compass size={24} strokeWidth={pathname === '/explore' ? 2.5 : 2} />
                         <span className="font-medium">Explore</span>
                     </Link>
@@ -50,7 +50,7 @@ function BottomNav({ onReportClick }: BottomNavProps) {
 
                 {/* 4. Scorecard */}
                 <motion.div whileTap={{ scale: 0.92 }} transition={springSnappy}>
-                    <Link href="/scorecard" className={clsx("flex flex-col items-center w-16 gap-1 transition-colors", pathname === '/scorecard' ? "text-blue-600" : "text-gray-400")}>
+                    <Link href="/scorecard" prefetch={false} className={clsx("flex flex-col items-center w-16 gap-1 transition-colors", pathname === '/scorecard' ? "text-blue-600" : "text-gray-400")}>
                         <Map size={24} strokeWidth={pathname === '/scorecard' ? 2.5 : 2} />
                         <span className="font-medium">City Insights</span>
                     </Link>
@@ -58,7 +58,7 @@ function BottomNav({ onReportClick }: BottomNavProps) {
 
                 {/* 5. Profile */}
                 <motion.div whileTap={{ scale: 0.92 }} transition={springSnappy}>
-                    <Link href="/profile" className={clsx("flex flex-col items-center w-16 gap-1 transition-colors", pathname === '/profile' ? "text-blue-600" : "text-gray-400")}>
+                    <Link href="/profile" prefetch={false} className={clsx("flex flex-col items-center w-16 gap-1 transition-colors", pathname === '/profile' ? "text-blue-600" : "text-gray-400")}>
                         <User size={24} strokeWidth={pathname === '/profile' ? 2.5 : 2} />
                         <span className="font-medium">Profile</span>
                     </Link>

@@ -25,6 +25,7 @@ export default function Shell({ children }: ShellProps) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+    const [authTrigger, setAuthTrigger] = useState('to report an issue');
 
     // Auto-open report dialog if user authenticated with REPORT_ISSUE intent
     useEffect(() => {
@@ -41,11 +42,32 @@ export default function Shell({ children }: ShellProps) {
     const handleReportClick = useCallback(() => {
         if (!user) {
             setPendingIntent({ type: 'REPORT_ISSUE' });
+            setAuthTrigger('to report an issue');
             setIsAuthModalOpen(true);
         } else {
             setIsReportDialogOpen(true);
         }
     }, [user]);
+
+    // Global listeners so child pages don't need duplicate modal instances
+    useEffect(() => {
+        const handleOpenReport = () => {
+            handleReportClick();
+        };
+        const handleOpenAuth = (e: Event) => {
+            const customEvent = e as CustomEvent;
+            if (customEvent.detail?.trigger) {
+                setAuthTrigger(customEvent.detail.trigger);
+            }
+            setIsAuthModalOpen(true);
+        };
+        window.addEventListener('civiclens:open-report', handleOpenReport);
+        window.addEventListener('civiclens:open-auth', handleOpenAuth);
+        return () => {
+            window.removeEventListener('civiclens:open-report', handleOpenReport);
+            window.removeEventListener('civiclens:open-auth', handleOpenAuth);
+        };
+    }, [handleReportClick]);
 
     const closeReportDialog = useCallback(() => setIsReportDialogOpen(false), []);
 
@@ -108,7 +130,7 @@ export default function Shell({ children }: ShellProps) {
             <AuthModule
                 isOpen={isAuthModalOpen}
                 onClose={() => setIsAuthModalOpen(false)}
-                triggerAction="to report an issue"
+                triggerAction={authTrigger}
             />
 
             <OnboardingModal />

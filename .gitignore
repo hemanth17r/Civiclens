@@ -57,6 +57,10 @@ firebase-debug.*.log
 # Locally cached user-uploaded media (served from Supabase in production)
 /public/uploads/
 
+# PWA generated build artifacts
+/public/sw.js*
+/public/workbox-*.js*
+
 # Antigravity / AI agent workspace
 .gemini/
 

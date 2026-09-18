@@ -1,19 +1,13 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useToast } from '@/context/ToastContext';
 import { getFeedIssues, Issue } from '@/lib/issues';
-import { setPendingIntent } from '@/lib/authIntents';
 import IssueCard from '@/components/IssueCard';
 import FeedSkeleton from '@/components/FeedSkeleton';
-const ReportIssueDialog = dynamic(() => import('@/components/ReportIssueDialog'), { ssr: false });
-const AuthModule = dynamic(() => import('@/components/AuthModule'), { ssr: false });
 import { useRouter } from 'next/navigation';
 import Script from 'next/script';
-import { RotateCw, ArrowRight, MapPin } from 'lucide-react';
+import { ArrowRight, MapPin } from 'lucide-react';
 import { clsx } from 'clsx';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -78,24 +72,36 @@ function HeroSection({
     );
 }
 
+// Helper to get initial city synchronously from localStorage (0ms delay)
+function getInitialCity(): string {
+    if (typeof window !== 'undefined') {
+        try {
+            const saved = localStorage.getItem('civiclens:last_city');
+            if (saved && saved.trim()) return saved.trim();
+        } catch {
+            // ignore localStorage restrictions
+        }
+    }
+    return 'Delhi';
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Home() {
     // ✅ Destructure `loading` (authLoading) so we wait for Firebase before deciding state
     const { user, userProfile, loading: authLoading, loginWithGoogleCredential } = useAuth();
-    const { showToast } = useToast();
     const router = useRouter();
 
+    const [currentCity, setCurrentCity] = useState<string>(getInitialCity);
     const [issues, setIssues] = useState<Issue[]>([]);
     const [loadingIssues, setLoadingIssues] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
+    // Track which city was actually fetched to prevent duplicate Firestore queries
+    const fetchedCityRef = useRef<string | null>(null);
+
     // User state: starts as 'A', updated once auth resolves
     const [userState, setUserState] = useState<'A' | 'B' | 'C'>('A');
     const [statsLoading, setStatsLoading] = useState(true);
-
-    const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
-    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-    const [authTrigger, setAuthTrigger] = useState('to contribute');
     const isGsiInitialized = useRef(false);
 
     // ── Determine user state after auth resolves ──────────────────────────────
@@ -140,14 +146,10 @@ export default function Home() {
         };
 
         checkUserStatus();
-    }, [user, authLoading]); // ✅ authLoading is now properly in scope & deps
+    }, [user, authLoading]);
 
-    // ── Feed ─────────────────────────────────────────────────────────────────
-    const fetchFeed = useCallback(async () => {
-        // Don't fetch until auth has resolved
-        if (authLoading) return;
-        // Logged-in users without a city set don't get a feed — show the nudge instead
-        const cityName = user ? (userProfile?.city || null) : 'Delhi';
+    // ── Feed Fetcher ──────────────────────────────────────────────────────────
+    const fetchFeedForCity = useCallback(async (cityName: string, userId?: string) => {
         if (!cityName) {
             setLoadingIssues(false);
             setRefreshing(false);
@@ -155,41 +157,46 @@ export default function Home() {
         }
         setRefreshing(true);
         try {
-            const data = await getFeedIssues(cityName, user?.uid);
+            const data = await getFeedIssues(cityName, userId);
             setIssues(data);
+            fetchedCityRef.current = cityName;
         } catch (e) {
             console.error('Feed fetch error:', e);
         } finally {
             setLoadingIssues(false);
             setRefreshing(false);
         }
-    }, [authLoading, user, userProfile]);
-
-    useEffect(() => {
-        fetchFeed();
-    }, [fetchFeed]);
-
-    // Auto-open report dialog if user authenticated with REPORT_ISSUE intent
-    useEffect(() => {
-        const handleIntentExecuted = (e: Event) => {
-            const customEvent = e as CustomEvent;
-            if (customEvent.detail?.type === 'REPORT_ISSUE') {
-                setIsReportDialogOpen(true);
-            }
-        };
-        window.addEventListener('civiclens:intent-executed', handleIntentExecuted);
-        return () => window.removeEventListener('civiclens:intent-executed', handleIntentExecuted);
     }, []);
+
+    // 1. Initial mount: fetch IMMEDIATELY with local cached city or default (0ms delay)
+    useEffect(() => {
+        const initialCity = getInitialCity();
+        setCurrentCity(initialCity);
+        fetchFeedForCity(initialCity, user?.uid);
+    }, [fetchFeedForCity]);
+
+    // 2. Profile sync: when userProfile resolves, save to localStorage & ONLY refetch if city differs
+    useEffect(() => {
+        if (authLoading) return;
+
+        if (user && userProfile?.city) {
+            const profileCity = userProfile.city.trim();
+            try {
+                localStorage.setItem('civiclens:last_city', profileCity);
+            } catch {}
+
+            // Prevent duplicate query: only fetch if city differs from what was already fetched
+            if (profileCity !== fetchedCityRef.current) {
+                setCurrentCity(profileCity);
+                fetchFeedForCity(profileCity, user.uid);
+            }
+        }
+    }, [authLoading, user, userProfile, fetchFeedForCity]);
 
     // ── Handlers ─────────────────────────────────────────────────────────────
     const handleReportClick = () => {
-        if (!user) {
-            setPendingIntent({ type: 'REPORT_ISSUE' });
-            setAuthTrigger('to report an issue');
-            setIsAuthModalOpen(true);
-        } else {
-            setIsReportDialogOpen(true);
-        }
+        // Dispatches to Shell's global modal handler
+        window.dispatchEvent(new CustomEvent('civiclens:open-report'));
     };
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -206,16 +213,13 @@ export default function Home() {
 
                 {/* Feed Header */}
                 <div className="flex items-center justify-between mb-3 px-4 md:px-0">
-                    {(() => {
-                        const cityName = user ? userProfile?.city : 'Delhi';
-                        return cityName ? (
-                            <p className="text-xs text-gray-400 font-medium flex items-center gap-1.5">
-                                <MapPin size={14} className="text-blue-500/70" />
-                                <span className="font-semibold text-gray-500">{cityName}</span>{' '}
-                                <span className="font-normal">& nearby</span>
-                            </p>
-                        ) : <span />;
-                    })()}
+                    {currentCity ? (
+                        <p className="text-xs text-gray-400 font-medium flex items-center gap-1.5">
+                            <MapPin size={14} className="text-blue-500/70" />
+                            <span className="font-semibold text-gray-500">{currentCity}</span>{' '}
+                            <span className="font-normal">& nearby</span>
+                        </p>
+                    ) : <span />}
                 </div>
 
                 {/* City nudge — shown when logged-in user hasn't set a city */}
@@ -237,7 +241,7 @@ export default function Home() {
                 )}
 
                 {/* Feed Content */}
-                <PullToRefresh onRefresh={async () => { await fetchFeed(); }} className="min-h-[60vh]">
+                <PullToRefresh onRefresh={async () => { await fetchFeedForCity(currentCity, user?.uid); }} className="min-h-[60vh]">
                     <div className="space-y-1 md:space-y-6">
                         {loadingIssues ? (
                             Array(2).fill(0).map((_, i) => (
@@ -274,17 +278,6 @@ export default function Home() {
 
                 <SemanticOverview />
             </div>
-
-            <ReportIssueDialog
-                isOpen={isReportDialogOpen}
-                onClose={() => setIsReportDialogOpen(false)}
-            />
-
-            <AuthModule
-                isOpen={isAuthModalOpen}
-                onClose={() => setIsAuthModalOpen(false)}
-                triggerAction={authTrigger}
-            />
 
             {!authLoading && !user && (
                 <Script
