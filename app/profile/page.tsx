@@ -10,7 +10,7 @@ import { collection, query, where, getDocs, orderBy, limit, doc, updateDoc, addD
 import { updateProfile } from 'firebase/auth';
 import { db } from '@/lib/firebase';
 import { supabase, getAuthenticatedSupabase } from '@/lib/supabase';
-import { Issue, getUserHypedIssues, getUserCommentedIssues, getUserSavedIssues } from '@/lib/issues';
+import { Issue, getUserHypedIssues, getUserCommentedIssues, getUserSavedIssues, getIssueTimeMs } from '@/lib/issues';
 import { getFollowStats } from '@/lib/followers';
 import IssueCard from '@/components/IssueCard';
 import FeedSkeleton from '@/components/FeedSkeleton';
@@ -123,14 +123,30 @@ export default function ProfilePage() {
         const fetchReports = async () => {
             if (authLoading || !user) return;
             try {
+                // Fetch issues by userId directly.
+                // Using equality query without orderBy avoids composite index requirement
+                // and prevents Firestore from silently dropping reports with null/pending timestamps.
                 const q = query(
                     collection(db, 'issues'),
-                    where('userId', '==', user.uid),
-                    orderBy('createdAt', 'desc'),
-                    limit(20)
+                    where('userId', '==', user.uid)
                 );
                 const snapshot = await getDocs(q);
-                setMyReports(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Issue)));
+                const reports = snapshot.docs
+                    .map(d => ({ id: d.id, ...d.data() } as Issue))
+                    .sort((a, b) => (getIssueTimeMs(b) || 0) - (getIssueTimeMs(a) || 0));
+
+                setMyReports(reports);
+
+                // Auto-sync gamification stats if stored count is out of sync with actual live reports
+                if (gamification?.stats && reports.length !== gamification.stats.totalReports) {
+                    updateDoc(doc(db, 'users', user.uid), {
+                        'gamificationStats.totalReports': reports.length
+                    }).catch(err => console.warn('Failed to sync totalReports:', err));
+                    setGamification(prev => prev ? {
+                        ...prev,
+                        stats: { ...prev.stats, totalReports: reports.length }
+                    } : null);
+                }
             } catch (e) {
                 console.error('Error fetching profile reports:', e);
             } finally {
@@ -138,7 +154,7 @@ export default function ProfilePage() {
             }
         };
         fetchReports();
-    }, [user, authLoading]);
+    }, [user, authLoading, gamification?.stats?.totalReports]);
 
     // Load follower stats
     useEffect(() => {
@@ -547,7 +563,7 @@ export default function ProfilePage() {
                             />
                         )}
                         <FileText size={16} />
-                        <span>Reports ({Math.max(gamification?.stats?.totalReports || 0, myReports.length)})</span>
+                        <span>Reports ({loadingReports ? (gamification?.stats?.totalReports || 0) : myReports.length})</span>
                     </motion.button>
                     <motion.button
                         {...tapScale.pill}

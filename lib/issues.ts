@@ -450,12 +450,26 @@ export const getPaginatedIssues = async (lastDoc: DocumentSnapshot | null = null
 
         conditions.push(limit(pageSize));
 
-        const q = query(baseQuery, ...conditions);
-        const querySnapshot = await withRetry(() => getDocs(q));
-        const rawIssues = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as Issue));
+        let querySnapshot;
+        try {
+            const q = query(baseQuery, ...conditions);
+            querySnapshot = await withRetry(() => getDocs(q));
+        } catch (queryErr: any) {
+            if (userId && (queryErr?.message?.includes('index') || queryErr?.code === 'failed-precondition')) {
+                console.warn("Composite index missing for userId query, falling back to equality query:", queryErr);
+                const fallbackQ = query(collection(db, 'issues'), where('userId', '==', userId), limit(pageSize * 2));
+                querySnapshot = await withRetry(() => getDocs(fallbackQ));
+            } else {
+                throw queryErr;
+            }
+        }
+
+        const rawIssues = querySnapshot.docs
+            .map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as Issue))
+            .sort((a, b) => (getIssueTimeMs(b) || 0) - (getIssueTimeMs(a) || 0));
 
         // Filter out hidden posts and unapproved 'Reported' posts unless owner
         const issues = rawIssues.filter(i => !(i as any).isHidden && (i.status !== 'Reported' || i.userId === userId));

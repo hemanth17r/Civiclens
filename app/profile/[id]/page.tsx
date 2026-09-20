@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
-import { Issue } from '@/lib/issues';
+import { Issue, getIssueTimeMs } from '@/lib/issues';
 import IssueCard from '@/components/IssueCard';
 import FeedSkeleton from '@/components/FeedSkeleton';
 import { ArrowLeft, UserCircle2, AlertTriangle, ShieldCheck, ChevronDown, Award, Zap } from 'lucide-react';
@@ -77,15 +77,17 @@ export default function PublicProfilePage() {
                 setProfile({ ...userData, uid: profileId });
 
                 // Fetch Public Issues reported by this user
+                // Using equality query without orderBy avoids composite index requirement
+                // and prevents Firestore from silently dropping reports with null/pending timestamps.
                 const issuesQuery = query(
                     collection(db, 'issues'),
-                    where('userId', '==', profileId),
-                    orderBy('createdAt', 'desc'),
-                    limit(50)
+                    where('userId', '==', profileId)
                 );
 
                 const snap = await getDocs(issuesQuery);
-                const fetchedIssues = snap.docs.map(d => ({ id: d.id, ...d.data() } as Issue));
+                const fetchedIssues = snap.docs
+                    .map(d => ({ id: d.id, ...d.data() } as Issue))
+                    .sort((a, b) => (getIssueTimeMs(b) || 0) - (getIssueTimeMs(a) || 0));
                 
                 // Allow all statuses so the community can vote on 'Verification Needed' / 'Reported' ones
                 // FILTER: Only show 'Reported' (Pending Approval) issues to their author
@@ -455,7 +457,7 @@ export default function PublicProfilePage() {
                 <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                     Reported Issues
                     <span className="bg-blue-100 text-blue-700 text-xs py-0.5 px-2.5 rounded-full font-bold">
-                        {Math.max(gamification?.stats?.totalReports || 0, issues.length)}
+                        {issues.length}
                     </span>
                 </h3>
 
