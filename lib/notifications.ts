@@ -1,5 +1,5 @@
 import {
-    collection, doc, addDoc, getDocs, getDoc, updateDoc, query, where, orderBy,
+    collection, doc, addDoc, setDoc, getDocs, getDoc, updateDoc, query, where, orderBy,
     limit, serverTimestamp, Timestamp, writeBatch, increment, onSnapshot
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
@@ -370,7 +370,8 @@ export const notifyCitizenIssueApproved = async (
     targetUid: string
 ): Promise<void> => {
     try {
-        await addDoc(collection(db, 'notifications'), {
+        const notifId = `${targetUid}_issue_approved_${issueId}`;
+        await setDoc(doc(db, 'notifications', notifId), {
             targetUid,
             type: 'issue_approved',
             isUrgent: false,
@@ -380,7 +381,7 @@ export const notifyCitizenIssueApproved = async (
             issueTitle,
             read: false,
             createdAt: serverTimestamp()
-        });
+        }, { merge: true });
     } catch (e) {
         console.error('Error notifying citizen of approval:', e);
     }
@@ -393,7 +394,8 @@ export const notifyCitizenIssueRejected = async (
     remarks: string
 ): Promise<void> => {
     try {
-        await addDoc(collection(db, 'notifications'), {
+        const notifId = `${targetUid}_issue_rejected_${issueId}`;
+        await setDoc(doc(db, 'notifications', notifId), {
             targetUid,
             type: 'issue_rejected',
             isUrgent: true,
@@ -403,7 +405,7 @@ export const notifyCitizenIssueRejected = async (
             issueTitle,
             read: false,
             createdAt: serverTimestamp()
-        });
+        }, { merge: true });
     } catch (e) {
         console.error('Error notifying citizen of rejection:', e);
     }

@@ -1,6 +1,12 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { 
+    getFirestore, 
+    initializeFirestore, 
+    persistentLocalCache, 
+    persistentMultipleTabManager,
+    Firestore
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getMessaging, Messaging } from "firebase/messaging";
 const firebaseConfig = {
@@ -19,13 +25,19 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 // Initialize Firebase App Check has been temporarily disabled.
 
 const auth = getAuth(app);
-const db = getFirestore(app);
 
-// Enable offline persistence in the browser for PWA capabilities
-if (typeof window !== 'undefined') {
-    enableIndexedDbPersistence(db).catch((err) => {
-        console.warn("Firestore offline persistence failed to enable:", err.code);
+// Modern multi-tab offline cache configuration
+// Uses Leader Election via persistentMultipleTabManager to prevent IndexedDB mutex locking across tabs
+let db: Firestore;
+try {
+    db = initializeFirestore(app, {
+        localCache: persistentLocalCache({
+            tabManager: persistentMultipleTabManager()
+        })
     });
+} catch {
+    // If Firestore was already initialized (e.g. during Fast Refresh / HMR), retrieve the existing instance
+    db = getFirestore(app);
 }
 
 const storage = getStorage(app);

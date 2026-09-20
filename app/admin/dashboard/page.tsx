@@ -44,6 +44,8 @@ export default function AdminDashboardPage() {
     const [approvedCityFilter, setApprovedCityFilter] = useState<string>('All');
     const [rejectingIssueId, setRejectingIssueId] = useState<string | null>(null);
     const [rejectionRemark, setRejectionRemark] = useState('');
+    const [actionPending, setActionPending] = useState<Record<string, boolean>>({});
+    const [isRejecting, setIsRejecting] = useState(false);
 
     // Toast state
     const [toast, setToast] = useState<{ title: string, type: 'success' | 'error' | 'info' } | null>(null);
@@ -210,6 +212,32 @@ export default function AdminDashboardPage() {
     }, [isAdmin, activeModule, loadedModules]);
 
     const handleApprove = async (id: string, title: string, targetUid?: string) => {
+        if (actionPending[id]) return;
+
+        // In-flight guard to block double-taps
+        setActionPending(prev => ({ ...prev, [id]: true }));
+
+        // Optimistic UI updates (instant response for admin)
+        const prevIssues = issues;
+        const prevApproved = approvedIssues;
+        const approvedIssue = issues.find(i => i.id === id);
+
+        setIssues(prev => prev.filter(i => i.id !== id));
+        if (approvedIssue) {
+            const updatedLog = [
+                ...(approvedIssue.statusChangedLog || []),
+                { from: 'Reported', to: 'Verification Needed', at: new Date().toISOString() }
+            ];
+            setApprovedIssues(prev => [{
+                ...approvedIssue,
+                status: 'Verification Needed',
+                approvedAt: Timestamp.now(),
+                statusChangedLog: updatedLog
+            }, ...prev]);
+        }
+        setCounts(prev => ({ ...prev, issues: Math.max(0, prev.issues - 1) }));
+        showToast('Issue approved and moved to active feed');
+
         try {
             await updateDoc(doc(db, 'issues', id), {
                 status: 'Verification Needed',
@@ -220,31 +248,26 @@ export default function AdminDashboardPage() {
                     at: new Date().toISOString()
                 })
             });
-            const approvedIssue = issues.find(i => i.id === id);
-            setIssues(prev => prev.filter(i => i.id !== id));
 
-            if (approvedIssue) {
-                const updatedLog = [
-                    ...(approvedIssue.statusChangedLog || []),
-                    { from: 'Reported', to: 'Verification Needed', at: new Date().toISOString() }
-                ];
-                setApprovedIssues(prev => [{
-                    ...approvedIssue,
-                    status: 'Verification Needed',
-                    approvedAt: Timestamp.now(),
-                    statusChangedLog: updatedLog
-                }, ...prev]);
-            }
-
-            setCounts(prev => ({ ...prev, issues: Math.max(0, prev.issues - 1) }));
-
+            // Fire-and-forget notification (non-blocking)
             if (targetUid) {
-                await notifyCitizenIssueApproved(id, title, targetUid);
+                notifyCitizenIssueApproved(id, title, targetUid).catch(err => {
+                    console.warn('Failed to send approval notification:', err);
+                });
             }
-            showToast('Issue approved and moved to active feed');
         } catch (e) {
             console.error('Error approving issue:', e);
+            // Rollback optimistic state on failure
+            setIssues(prevIssues);
+            setApprovedIssues(prevApproved);
+            setCounts(prev => ({ ...prev, issues: prevIssues.length }));
             showToast('Failed to approve issue', 'error');
+        } finally {
+            setActionPending(prev => {
+                const next = { ...prev };
+                delete next[id];
+                return next;
+            });
         }
     };
 
@@ -367,7 +390,7 @@ export default function AdminDashboardPage() {
     };
 
     const confirmReject = async () => {
-        if (!rejectingIssueId) return;
+        if (!rejectingIssueId || isRejecting) return;
         if (!rejectionRemark.trim()) {
             showToast('Please provide a reason for rejection.', 'error');
             return;
@@ -376,21 +399,34 @@ export default function AdminDashboardPage() {
         const issueToReject = issues.find(i => i.id === rejectingIssueId);
         if (!issueToReject) return;
 
+        const id = rejectingIssueId;
+        const remark = rejectionRemark;
+        setIsRejecting(true);
+
+        // Optimistic UI updates
+        const prevIssues = issues;
+        setIssues(prev => prev.filter(i => i.id !== id));
+        setCounts(prev => ({ ...prev, issues: Math.max(0, prev.issues - 1) }));
+        setRejectingIssueId(null);
+        setRejectionRemark('');
+        showToast('Issue rejected and user notified', 'info');
+
         try {
-            await deleteDoc(doc(db, 'issues', rejectingIssueId));
-            setIssues(prev => prev.filter(i => i.id !== rejectingIssueId));
-            setCounts(prev => ({ ...prev, issues: Math.max(0, prev.issues - 1) }));
+            await deleteDoc(doc(db, 'issues', id));
 
             if (issueToReject.userId) {
-                await notifyCitizenIssueRejected(rejectingIssueId, issueToReject.title, issueToReject.userId, rejectionRemark);
+                notifyCitizenIssueRejected(id, issueToReject.title, issueToReject.userId, remark).catch(err => {
+                    console.warn('Failed to send rejection notification:', err);
+                });
             }
-
-            setRejectingIssueId(null);
-            setRejectionRemark('');
-            showToast('Issue rejected and user notified', 'info');
         } catch (e) {
             console.error('Error rejecting issue:', e);
+            // Rollback optimistic state on failure
+            setIssues(prevIssues);
+            setCounts(prev => ({ ...prev, issues: prevIssues.length }));
             showToast('Failed to reject issue', 'error');
+        } finally {
+            setIsRejecting(false);
         }
     };
 
@@ -597,10 +633,19 @@ export default function AdminDashboardPage() {
 
                                                 {/* Actions */}
                                                 <div className="flex gap-2 mt-auto pt-2 border-t border-gray-50">
-                                                    <button onClick={() => handleApprove(issue.id, issue.title, issue.userId)} className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1 transition-colors">
-                                                        <CheckCircle size={14} /> Approve
+                                                    <button 
+                                                        onClick={() => handleApprove(issue.id, issue.title, issue.userId)} 
+                                                        disabled={!!actionPending[issue.id]}
+                                                        className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                                    >
+                                                        {actionPending[issue.id] ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                                                        {actionPending[issue.id] ? 'Approving...' : 'Approve'}
                                                     </button>
-                                                    <button onClick={() => setRejectingIssueId(issue.id)} className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1 transition-colors">
+                                                    <button 
+                                                        onClick={() => setRejectingIssueId(issue.id)} 
+                                                        disabled={!!actionPending[issue.id]}
+                                                        className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs py-2 rounded-lg flex items-center justify-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                                    >
                                                         <XCircle size={14} /> Reject
                                                     </button>
                                                 </div>
@@ -901,9 +946,11 @@ export default function AdminDashboardPage() {
                             </button>
                             <button
                                 onClick={confirmReject}
-                                className="flex-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition-colors"
+                                disabled={isRejecting}
+                                className="flex-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1.5"
                             >
-                                Confirm Reject
+                                {isRejecting ? <Loader2 size={16} className="animate-spin" /> : null}
+                                {isRejecting ? 'Rejecting...' : 'Confirm Reject'}
                             </button>
                         </div>
                     </div>
